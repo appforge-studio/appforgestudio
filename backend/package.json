@@ -1,0 +1,19 @@
+{
+    "name": "backend",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "An RPC server created with Arri RPC",
+    "scripts": {
+        "dev": "arri dev"
+    },
+    "keywords": [],
+    "private": true,
+    "imports": {
+        "@database/*": "../database/*",
+        "@database": "../database/index.ts",
+        "@env": "../env.ts"
+    },
+    "dependencies": {
+        "ulidx": "^2.4.1"
+    }
+}

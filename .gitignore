@@ -1,0 +1,6 @@
+..env
+.drizzle/
+node_modules/
+backend/uploads/
+frontend\android\key.properties
+.keys/
