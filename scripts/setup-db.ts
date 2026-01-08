@@ -5,6 +5,7 @@ import { eq, inArray } from 'drizzle-orm';
 import postgres from 'postgres';
 import { types } from '../database/schema/types';
 import { components } from '../database/schema/components';
+import { svgs } from '../database/schema/svgs';
 import { ulid } from 'ulidx';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -28,8 +29,8 @@ async function setupDatabase() {
     const client = postgres(DATABASE_URL!);
     const db = drizzle(client);
 
-    const typeNames = ['string', 'number', 'boolean', 'color', 'side', 'corner', 'textAlign', 'fontWeight', 'boxFit'];
-    const componentNames = ['container', 'text', 'image'];
+    const typeNames = ['string', 'number', 'boolean', 'color', 'side', 'corner', 'textAlign', 'fontWeight', 'boxFit', 'icon'];
+    const componentNames = ['container', 'text', 'image', 'icon'];
 
     // 1. Cleanup existing defaults and conflicting records
     console.log('🧹 Cleaning up existing default and conflicting records...');
@@ -37,6 +38,7 @@ async function setupDatabase() {
     // Delete explicitly marked defaults
     await db.delete(types).where(eq(types.isDefault, true));
     await db.delete(components).where(eq(components.isDefault, true));
+    await db.delete(svgs).where(eq(svgs.isDefault, true));
 
     // Also delete any existing records that match the names we are about to seed
     // to avoid unique constraint violations
@@ -54,6 +56,7 @@ async function setupDatabase() {
       { name: 'color', className: 'Color', path: '', structure: 'object', isDefault: true },
       { name: 'side', className: 'Side', path: '', structure: 'object', isDefault: true },
       { name: 'corner', className: 'Corner', path: '', structure: 'object', isDefault: true },
+      { name: 'icon', className: 'Icon', path: '', structure: 'object', isDefault: true },
       {
         name: 'textAlign',
         className: 'TextAlign',
@@ -110,6 +113,24 @@ async function setupDatabase() {
     };
 
     const defaultComponents = [
+      {
+        name: 'icon',
+        className: 'IconComponent',
+        path: 'components/icon',
+        isDefault: true,
+        isResizable: false, // Handle size via property
+        code: getComponentCode('icon'),
+        properties: [
+          {
+            name: 'icon', type: 'icon', initialValue: (() => {
+              try { return fs.readFileSync(path.join(__dirname, 'svgs', 'solid', 'house.svg'), 'utf8'); }
+              catch { return ""; }
+            })()
+          },
+          { name: 'color', type: 'color', initialValue: '#000000' },
+          { name: 'size', type: 'number', initialValue: 24.0 },
+        ]
+      },
       {
         name: 'container',
         className: 'ContainerComponent',
@@ -180,6 +201,45 @@ async function setupDatabase() {
 
     await db.insert(components).values(componentsWithIds);
     console.log(`✅ Loaded and generated ${componentsWithIds.length} default components.`);
+
+    // 4. Seed SVGs
+    console.log('🎨 Seeding SVGs...');
+    const svgTypes = ['brands', 'regular', 'solid'];
+    const svgsToInsert: any[] = [];
+
+    for (const type of svgTypes) {
+      const dirPath = path.join(__dirname, 'svgs', type);
+      if (fs.existsSync(dirPath)) {
+        const files = fs.readdirSync(dirPath);
+        for (const file of files) {
+          if (file.endsWith('.svg')) {
+            const name = path.parse(file).name;
+            const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
+            svgsToInsert.push({
+              id: ulid(),
+              name: name,
+              svg: content,
+              type: type,
+              isDefault: true
+            });
+          }
+        }
+      } else {
+        console.warn(`⚠️ SVG directory not found: ${dirPath}`);
+      }
+    }
+
+    if (svgsToInsert.length > 0) {
+      const batchSize = 500;
+      for (let i = 0; i < svgsToInsert.length; i += batchSize) {
+        const batch = svgsToInsert.slice(i, i + batchSize);
+        await db.insert(svgs).values(batch);
+        console.log(`   Inserted SVG batch ${Math.floor(i / batchSize) + 1} (${batch.length} items)`);
+      }
+      console.log(`✅ Loaded ${svgsToInsert.length} default SVGs.`);
+    } else {
+      console.log('ℹ️ No SVGs found to seed.');
+    }
 
     console.log('🏗️ Generating component factories...');
     await generateComponentFactories();

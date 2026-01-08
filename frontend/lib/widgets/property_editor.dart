@@ -8,6 +8,7 @@ import '../models/types/side.dart';
 import 'property_text_field.dart';
 
 import 'property_color_field.dart';
+import 'property_icon_field.dart';
 
 class EnablePropertyWrapper extends StatelessWidget {
   final Property property;
@@ -165,6 +166,8 @@ class GenericPropertyEditor extends StatelessWidget {
         return _buildDropdownField(property as DropdownProperty);
       case PropertyType.side:
         return _buildSideField(property as SideProperty);
+      case PropertyType.icon:
+        return _buildIconField(property as IconProperty);
       default:
         return Text('Unsupported property type: ${property.type}');
     }
@@ -281,6 +284,18 @@ class GenericPropertyEditor extends StatelessWidget {
             _updateValue(property.key, newSide);
           }
         },
+      ),
+    );
+  }
+
+  Widget _buildIconField(IconProperty property) {
+    return EnablePropertyWrapper(
+      property: property,
+      onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
+      child: PropertyIconField(
+        label: property.displayName,
+        value: property.value,
+        onChanged: (newValue) => _updateValue(property.key, newValue),
       ),
     );
   }

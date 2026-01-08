@@ -42,6 +42,8 @@ dependencies:
   json_dynamic_widget: ^12.0.0+3
   flutter_colorpicker: ^1.1.0
   arri_client: ^0.80.3
+  flutter_svg: ^2.2.3
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

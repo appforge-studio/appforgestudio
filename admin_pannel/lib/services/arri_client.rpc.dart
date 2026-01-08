@@ -35,6 +35,15 @@ class ArriClient {
     heartbeatTimeoutMultiplier: _heartbeatTimeoutMultiplier,
     timeout: _timeout,
   );
+
+  ArriClientSvgService get svg => ArriClientSvgService(
+    baseUrl: _baseUrl,
+    headers: _headers,
+    httpClient: _httpClient,
+    onError: _onError,
+    heartbeatTimeoutMultiplier: _heartbeatTimeoutMultiplier,
+    timeout: _timeout,
+  );
 }
 
 class ArriClientAdminService {
@@ -160,6 +169,43 @@ class ArriClientAdminService {
       clientVersion: _clientVersion,
       params: params.toJson(),
       parser: (body) => UpdateTypeDefinitionResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+}
+
+class ArriClientSvgService {
+  final http.Client? _httpClient;
+  final String _baseUrl;
+  final String _clientVersion = "";
+  final FutureOr<Map<String, String>> Function()? _headers;
+  final Function(Object)? _onError;
+  final int? _heartbeatTimeoutMultiplier;
+  final Duration? _timeout;
+  ArriClientSvgService({
+    http.Client? httpClient,
+    required String baseUrl,
+    FutureOr<Map<String, String>> Function()? headers,
+    Function(Object)? onError,
+    int? heartbeatTimeoutMultiplier,
+    Duration? timeout,
+  }) : _httpClient = httpClient,
+       _baseUrl = baseUrl,
+       _headers = headers,
+       _onError = onError,
+       _heartbeatTimeoutMultiplier = heartbeatTimeoutMultiplier,
+       _timeout = timeout;
+
+  Future<GetSvgsResponse> get_svgs(GetSvgsParams params) async {
+    return parsedArriRequest(
+      "$_baseUrl/svg/get-svgs",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => GetSvgsResponse.fromJsonString(body),
       onError: _onError,
       timeout: _timeout,
     );
@@ -1705,5 +1751,269 @@ class UpdateTypeDefinitionResponse implements ArriModel {
   @override
   String toString() {
     return "UpdateTypeDefinitionResponse ${toJsonString()}";
+  }
+}
+
+class GetSvgsParams implements ArriModel {
+  final int limit;
+  final int offset;
+  final String? search;
+  const GetSvgsParams({
+    required this.limit,
+    required this.offset,
+    required this.search,
+  });
+
+  factory GetSvgsParams.empty() {
+    return GetSvgsParams(limit: 0, offset: 0, search: null);
+  }
+
+  factory GetSvgsParams.fromJson(Map<String, dynamic> _input_) {
+    final limit = intFromDynamic(_input_["limit"], 0);
+    final offset = intFromDynamic(_input_["offset"], 0);
+    final search = nullableTypeFromDynamic<String>(_input_["search"]);
+    return GetSvgsParams(limit: limit, offset: offset, search: search);
+  }
+
+  factory GetSvgsParams.fromJsonString(String input) {
+    return GetSvgsParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "limit": limit,
+      "offset": offset,
+      "search": search,
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("limit=$limit");
+    _queryParts_.add("offset=$offset");
+    _queryParts_.add("search=$search");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GetSvgsParams copyWith({
+    int? limit,
+    int? offset,
+    String? Function()? search,
+  }) {
+    return GetSvgsParams(
+      limit: limit ?? this.limit,
+      offset: offset ?? this.offset,
+      search: search != null ? search() : this.search,
+    );
+  }
+
+  @override
+  List<Object?> get props => [limit, offset, search];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GetSvgsParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GetSvgsParams ${toJsonString()}";
+  }
+}
+
+class GetSvgsResponse implements ArriModel {
+  final bool success;
+  final String message;
+  final int total;
+  final List<SvgInfo> svgs;
+  const GetSvgsResponse({
+    required this.success,
+    required this.message,
+    required this.total,
+    required this.svgs,
+  });
+
+  factory GetSvgsResponse.empty() {
+    return GetSvgsResponse(success: false, message: "", total: 0, svgs: []);
+  }
+
+  factory GetSvgsResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    final message = typeFromDynamic<String>(_input_["message"], "");
+    final total = intFromDynamic(_input_["total"], 0);
+    final svgs = _input_["svgs"] is List
+        ? (_input_["svgs"] as List)
+              .map(
+                (_el_) => _el_ is Map<String, dynamic>
+                    ? SvgInfo.fromJson(_el_)
+                    : SvgInfo.empty(),
+              )
+              .toList()
+        : <SvgInfo>[];
+    return GetSvgsResponse(
+      success: success,
+      message: message,
+      total: total,
+      svgs: svgs,
+    );
+  }
+
+  factory GetSvgsResponse.fromJsonString(String input) {
+    return GetSvgsResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "success": success,
+      "message": message,
+      "total": total,
+      "svgs": svgs.map((_el_) => _el_.toJson()).toList(),
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("success=$success");
+    _queryParts_.add("message=$message");
+    _queryParts_.add("total=$total");
+    print(
+      "[WARNING] arrays cannot be serialized to query params. Skipping field at /GetSvgsResponse/svgs.",
+    );
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GetSvgsResponse copyWith({
+    bool? success,
+    String? message,
+    int? total,
+    List<SvgInfo>? svgs,
+  }) {
+    return GetSvgsResponse(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      total: total ?? this.total,
+      svgs: svgs ?? this.svgs,
+    );
+  }
+
+  @override
+  List<Object?> get props => [success, message, total, svgs];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GetSvgsResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GetSvgsResponse ${toJsonString()}";
+  }
+}
+
+class SvgInfo implements ArriModel {
+  final String id;
+  final String name;
+  final String svg;
+  final String type;
+  const SvgInfo({
+    required this.id,
+    required this.name,
+    required this.svg,
+    required this.type,
+  });
+
+  factory SvgInfo.empty() {
+    return SvgInfo(id: "", name: "", svg: "", type: "");
+  }
+
+  factory SvgInfo.fromJson(Map<String, dynamic> _input_) {
+    final id = typeFromDynamic<String>(_input_["id"], "");
+    final name = typeFromDynamic<String>(_input_["name"], "");
+    final svg = typeFromDynamic<String>(_input_["svg"], "");
+    final type = typeFromDynamic<String>(_input_["type"], "");
+    return SvgInfo(id: id, name: name, svg: svg, type: type);
+  }
+
+  factory SvgInfo.fromJsonString(String input) {
+    return SvgInfo.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "id": id,
+      "name": name,
+      "svg": svg,
+      "type": type,
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("id=$id");
+    _queryParts_.add("name=$name");
+    _queryParts_.add("svg=$svg");
+    _queryParts_.add("type=$type");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  SvgInfo copyWith({String? id, String? name, String? svg, String? type}) {
+    return SvgInfo(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      svg: svg ?? this.svg,
+      type: type ?? this.type,
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, name, svg, type];
+
+  @override
+  bool operator ==(Object other) {
+    return other is SvgInfo && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "SvgInfo ${toJsonString()}";
   }
 }

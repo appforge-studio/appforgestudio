@@ -64,6 +64,7 @@ enum PropertyType {
   alignment,
   fontWeight,
   boxFit,
+  icon,
 }
 
 // String property implementation
@@ -533,6 +534,55 @@ class CornerProperty extends Property {
       key: key,
       displayName: displayName,
       value: value is XDCorner ? value : _value,
+      enable: enable ?? this.enable,
+    );
+  }
+}
+
+// Icon property implementation
+class IconProperty extends Property {
+  final String _value;
+
+  const IconProperty({
+    required super.key,
+    required super.displayName,
+    required String value,
+    super.enable,
+  }) : _value = value,
+       super(type: PropertyType.icon);
+
+  @override
+  String get value => _value;
+
+  @override
+  dynamic toJson() => {'value': _value, 'enable': enable.toJson()};
+
+  @override
+  IconProperty fromJson(dynamic jsonValue) {
+    String val = _value;
+    Enabled en = enable;
+
+    if (jsonValue is Map<String, dynamic> && jsonValue.containsKey('enable')) {
+      val = jsonValue['value']?.toString() ?? _value;
+      en = Enabled.fromJson(jsonValue['enable']);
+    } else if (jsonValue is String) {
+      val = jsonValue;
+    }
+
+    return IconProperty(
+      key: key,
+      displayName: displayName,
+      value: val,
+      enable: en,
+    );
+  }
+
+  @override
+  IconProperty copyWith({dynamic value, Enabled? enable}) {
+    return IconProperty(
+      key: key,
+      displayName: displayName,
+      value: value?.toString() ?? _value,
       enable: enable ?? this.enable,
     );
   }

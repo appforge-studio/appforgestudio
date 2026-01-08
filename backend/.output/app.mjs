@@ -852,8 +852,8 @@ async function readAndFillTemplate(templatePath, replacements) {
   const template = await fs4.readFile(templatePath, "utf8");
   return fillTemplate(template, replacements);
 }
-function clearAndUpper(text3) {
-  return text3.replace(/-/, "").toUpperCase();
+function clearAndUpper(text4) {
+  return text4.replace(/-/, "").toUpperCase();
 }
 async function getAvailableComponents(rootDir) {
   const componentsDir = join2(rootDir, "frontend", "lib", "components");
@@ -879,7 +879,7 @@ async function generateComponentFactories() {
   const rootDir = getProjectRoot();
   const components2 = await getAvailableComponents(rootDir);
   const templatesDir = join2(rootDir, "backend", "src", "templates", "components");
-  components2.sort((a8, b) => a8.name.localeCompare(b.name));
+  components2.sort((a9, b) => a9.name.localeCompare(b.name));
   const imports = components2.map(
     (c) => `import '../components/${c.name}/component.dart';
 import '../components/${c.name}/properties.dart';`
@@ -984,6 +984,13 @@ async function createComponentFiles(options) {
         ),
         enable: Enabled(show: true, enabled: true),
       ),`;
+      case "icon":
+        return `      const IconProperty(
+            key: '${prop.name}',
+            displayName: '${prop.name}',
+            value: '${prop.initialValue}',
+            enable: Enabled(show: false, enabled: true),
+          ),`;
       default:
         return "";
     }
@@ -1457,6 +1464,95 @@ var update_type_definition_rpc_default = defineRpc7({
   }
 });
 
+// src/procedures/svg/get_svgs.rpc.ts
+import { a as a8 } from "@arrirpc/schema";
+import { defineRpc as defineRpc8 } from "@arrirpc/server";
+
+// ../database/schema/svgs.ts
+import { pgTable as pgTable3, text as text3, varchar as varchar4, boolean as boolean3 } from "drizzle-orm/pg-core";
+var svgs = pgTable3("svgs", {
+  id: ulidField("id").primaryKey(),
+  name: varchar4("name", { length: 255 }).notNull(),
+  svg: text3("svg").notNull(),
+  type: varchar4("type", { length: 50 }).notNull(),
+  // 'regular', 'solid', 'brands'
+  isDefault: boolean3("is_default").notNull().default(false),
+  ...defaultDateFields
+});
+
+// src/procedures/svg/get_svgs.rpc.ts
+import { or, count, ilike, desc as desc2 } from "drizzle-orm";
+var get_svgs_rpc_default = defineRpc8({
+  params: a8.object("GetSvgsParams", {
+    limit: a8.int32(),
+    offset: a8.int32(),
+    search: a8.nullable(a8.string())
+  }),
+  response: a8.object("GetSvgsResponse", {
+    success: a8.boolean(),
+    message: a8.string(),
+    total: a8.int32(),
+    svgs: a8.array(
+      a8.object("SvgInfo", {
+        id: a8.string(),
+        name: a8.string(),
+        svg: a8.string(),
+        type: a8.string()
+      })
+    )
+  }),
+  async handler({ limit, offset, search }) {
+    console.log(`[get_svgs] params: limit=${limit}, offset=${offset}, search=${search}`);
+    try {
+      const db2 = getDrizzle();
+      const pageSize = limit || 50;
+      const pageOffset = offset || 0;
+      let query = db2.select().from(svgs).$dynamic();
+      if (search) {
+        const searchPattern = `%${search}%`;
+        query = query.where(
+          or(
+            ilike(svgs.name, searchPattern),
+            ilike(svgs.type, searchPattern)
+          )
+        );
+      }
+      let countQuery = db2.select({ count: count() }).from(svgs).$dynamic();
+      if (search) {
+        const searchPattern = `%${search}%`;
+        countQuery = countQuery.where(
+          or(
+            ilike(svgs.name, searchPattern),
+            ilike(svgs.type, searchPattern)
+          )
+        );
+      }
+      const totalResult = await countQuery;
+      const total = totalResult[0]?.count || 0;
+      const results = await query.limit(pageSize).offset(pageOffset).orderBy(desc2(svgs.createdAt), desc2(svgs.id));
+      return {
+        success: true,
+        message: "Fetched SVGs successfully",
+        total,
+        svgs: results.map((s) => ({
+          id: s.id,
+          name: s.name,
+          svg: s.svg,
+          type: s.type
+        }))
+      };
+    } catch (error) {
+      console.error("Error fetching SVGs:", error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to fetch SVGs",
+        total: 0,
+        svgs: []
+      };
+    }
+  }
+});
+
 // .arri/__arri_app.ts
 sourceMapSupport.install();
 app_default.rpc("admin.create_component", create_component_rpc_default);
@@ -1466,6 +1562,7 @@ app_default.rpc("admin.get_types", get_types_rpc_default);
 app_default.rpc("admin.save_type_code", save_type_code_rpc_default);
 app_default.rpc("admin.update_component", update_component_rpc_default);
 app_default.rpc("admin.update_type_definition", update_type_definition_rpc_default);
+app_default.rpc("svg.get_svgs", get_svgs_rpc_default);
 var arri_app_default = app_default;
 export {
   arri_app_default as default

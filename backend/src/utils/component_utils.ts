@@ -16,7 +16,7 @@ export const COMPONENTS_EXPORT_FILE_REL = './frontend/lib/components/components.
 
 export interface ComponentProperty {
   name: string;
-  type: 'string' | 'number' | 'boolean' | 'color';
+  type: 'string' | 'number' | 'boolean' | 'color' | 'icon';
   initialValue: any;
 }
 
@@ -219,6 +219,13 @@ export async function createComponentFiles(options: CreateComponentOptions) {
         ),
         enable: Enabled(show: true, enabled: true),
       ),`;
+      case 'icon':
+        return `      const IconProperty(
+            key: '${prop.name}',
+            displayName: '${prop.name}',
+            value: '${prop.initialValue}',
+            enable: Enabled(show: false, enabled: true),
+          ),`;
       default:
         return '';
     }
