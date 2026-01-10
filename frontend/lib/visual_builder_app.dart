@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'bindings/app_bindings.dart';
 import 'controllers/canvas_controller.dart';
+import 'utilities/pallet.dart';
 import 'widgets/component_panel.dart';
 import 'widgets/design_canvas.dart';
 import 'widgets/property_editor.dart';
-import 'widgets/overlay_demo.dart';
 
 class VisualBuilderApp extends StatelessWidget {
   const VisualBuilderApp({super.key});
@@ -15,7 +16,18 @@ class VisualBuilderApp extends StatelessWidget {
     return GetMaterialApp(
       title: 'Visual Builder',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        textTheme: GoogleFonts.notoSansTextTheme(
+          TextTheme(
+            displayMedium: TextStyle(color: Pallet.font1),
+            displayLarge: TextStyle(color: Pallet.font1),
+            bodyMedium: TextStyle(color: Pallet.font1),
+            bodyLarge: TextStyle(color: Pallet.font1),
+            titleMedium: TextStyle(color: Pallet.font1),
+          ),
+        ),
+        iconTheme: IconThemeData(color: Pallet.font2),
+        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
       initialBinding: AppBindings(),
@@ -30,25 +42,7 @@ class VisualBuilderHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Visual Builder'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const OverlayDemo(),
-                ),
-              );
-            },
-            child: const Text(
-              'Overlay Demo',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
+      backgroundColor: Pallet.background,
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () {
@@ -60,14 +54,23 @@ class VisualBuilderHome extends StatelessWidget {
           children: [
             // Component Panel (left side)
             const ComponentPanel(),
-            // Design Canvas (center)
-            const Expanded(
-              flex: 2,
-              child: DesignCanvas(),
+
+            Expanded(
+              child: Column(
+                children: [
+                  const SizedBox(height: 15),
+                  // const Tabs(), // TODO: Implement Tabs if needed matching old UI
+                  const SizedBox(height: 5),
+                  // Design Canvas (center)
+                  const Expanded(child: DesignCanvas()),
+                ],
+              ),
             ),
+
             // Property Editor (right side) - prevent deselection when clicking here
             GestureDetector(
-              behavior: HitTestBehavior.opaque, // Block taps from reaching parent
+              behavior:
+                  HitTestBehavior.opaque, // Block taps from reaching parent
               onTap: () {
                 // Absorb taps to prevent deselection when clicking on property editor
                 print('🎯 Property editor tap - not deselecting');

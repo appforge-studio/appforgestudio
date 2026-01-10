@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'property_icon_selector.dart';
 
+import '../utilities/pallet.dart';
+
 class PropertyIconField extends StatelessWidget {
   final String label;
   final String value;
@@ -17,51 +19,60 @@ class PropertyIconField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        SizedBox(
+          width: 80,
+          child: Text(
+            "$label:",
+            style: TextStyle(fontSize: 13, color: Pallet.font1),
+          ),
         ),
-        const SizedBox(height: 8),
-        InkWell(
-          onTap: () {
-            Get.dialog(PropertyIconSelector(onIconSelected: onChanged));
-          },
-          child: Container(
-            height: 60,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey[400]!),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              children: [
-                if (value.isNotEmpty)
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: SvgPicture.string(value),
-                  )
-                else
-                  const Icon(Icons.image_not_supported),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    value.isNotEmpty ? 'SVG Selected' : 'Select Icon',
-                    style: TextStyle(
-                      color: value.isNotEmpty ? Colors.black : Colors.grey,
+        const SizedBox(width: 5),
+        Expanded(
+          child: InkWell(
+            onTap: () {
+              Get.dialog(PropertyIconSelector(onIconSelected: onChanged));
+            },
+            child: Container(
+              height: 35,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: Pallet.inside2,
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Row(
+                children: [
+                  if (value.isNotEmpty)
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: SvgPicture.string(
+                        value,
+                        colorFilter: ColorFilter.mode(
+                          Pallet.font1,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.image_not_supported,
+                      size: 20,
+                      color: Pallet.font3,
                     ),
-                    overflow: TextOverflow.ellipsis,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      value.isNotEmpty ? 'SVG Selected' : 'Select',
+                      style: TextStyle(color: Pallet.font1, fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey,
-                ),
-              ],
+                  Icon(Icons.arrow_drop_down, size: 18, color: Pallet.font3),
+                ],
+              ),
             ),
           ),
         ),

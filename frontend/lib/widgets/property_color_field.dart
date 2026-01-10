@@ -1,6 +1,8 @@
+import 'package:appforge/widgets/color_picker/colorpicker.dart';
+import 'package:appforge/widgets/color_picker/palette.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../models/types/color.dart';
+import '../utilities/pallet.dart';
 
 class PropertyColorField extends StatelessWidget {
   final String label;
@@ -18,52 +20,52 @@ class PropertyColorField extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentColor = value.toColor();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
+        SizedBox(
+          width: 80,
+          child: Text(
+            "$label:",
+            style: TextStyle(fontSize: 13, color: Pallet.font1),
           ),
         ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: () {
-            _showColorPicker(context, currentColor);
-          },
-          child: Container(
-            height: 40,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(4),
-              color: Colors.white,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: currentColor,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(3),
-                      bottomLeft: Radius.circular(3),
-                    ),
-                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      _colorToHex(currentColor),
-                      style: const TextStyle(fontSize: 14),
+        const SizedBox(width: 5),
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              _showColorPicker(context, currentColor);
+            },
+            child: Container(
+              height: 30,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(5),
+                color: Pallet.inside2,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: currentColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(5),
+                        bottomLeft: Radius.circular(5),
+                      ),
+                      border: Border(right: BorderSide(color: Pallet.divider)),
                     ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        _colorToHex(currentColor),
+                        style: TextStyle(fontSize: 13, color: Pallet.font1),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -101,10 +103,7 @@ class PropertyColorField extends StatelessWidget {
               child: const Text('Select'),
               onPressed: () {
                 final hexString = _colorToHex(pickerColor);
-                final newXDColor = XDColor(
-                  [hexString],
-                  type: ColorType.solid,
-                );
+                final newXDColor = XDColor([hexString], type: ColorType.solid);
                 onChanged(newXDColor);
                 Navigator.of(context).pop();
               },

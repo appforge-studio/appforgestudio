@@ -19,116 +19,127 @@ class DesignCanvas extends StatelessWidget {
     final canvasController = Get.find<CanvasController>();
 
     return Container(
-      color: Colors.grey[100],
+      color: Colors.transparent,
       child: Center(
         child: Obx(() {
           final canvasSize = canvasController.canvasSize;
           final isDragging = canvasController.isDragging;
 
-          return Container(
-            width: canvasSize.width,
-            height: canvasSize.height,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(
-                color: isDragging
-                    ? Colors.blue.withValues(alpha: 0.5)
-                    : Colors.grey[300]!,
-                width: isDragging ? 2.0 : 1.0,
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: canvasSize.width + 50,
+                height: canvasSize.height,
+                child: Image.asset('assets/phone.png', fit: BoxFit.fill),
               ),
-              borderRadius: BorderRadius.circular(8.0),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8.0,
-                  offset: const Offset(0, 2),
+              Container(
+                width: canvasSize.width,
+                height: canvasSize.height - 200,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(
+                    color: isDragging
+                        ? Colors.blue.withValues(alpha: 0.5)
+                        : Colors.grey[300]!,
+                    width: isDragging ? 2.0 : 1.0,
+                  ),
+                  borderRadius: BorderRadius.circular(8.0),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 8.0,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Builder(
-              builder: (canvasContext) => MouseRegion(
-                cursor: canvasController.isResizingComponent
-                    ? MouseCursor
-                          .defer // Let child MouseRegions handle cursor
-                    : _getCanvasCursor(canvasController, isDragging),
-                child: DragTarget<ComponentType>(
-                  onWillAcceptWithDetails: (details) => true,
-                  onAcceptWithDetails: (details) {
-                    final componentType = details.data;
+                child: Builder(
+                  builder: (canvasContext) => MouseRegion(
+                    cursor: canvasController.isResizingComponent
+                        ? MouseCursor
+                              .defer // Let child MouseRegions handle cursor
+                        : _getCanvasCursor(canvasController, isDragging),
+                    child: DragTarget<ComponentType>(
+                      onWillAcceptWithDetails: (details) => true,
+                      onAcceptWithDetails: (details) {
+                        final componentType = details.data;
 
-                    // Convert global position to local canvas position
-                    final RenderBox renderBox =
-                        canvasContext.findRenderObject() as RenderBox;
-                    final localPosition = renderBox.globalToLocal(
-                      details.offset,
-                    );
+                        // Convert global position to local canvas position
+                        final RenderBox renderBox =
+                            canvasContext.findRenderObject() as RenderBox;
+                        final localPosition = renderBox.globalToLocal(
+                          details.offset,
+                        );
 
-                    // Constrain position within canvas bounds
-                    final constrainedX = localPosition.dx.clamp(
-                      0.0,
-                      canvasSize.width - 50,
-                    );
-                    final constrainedY = localPosition.dy.clamp(
-                      0.0,
-                      canvasSize.height - 50,
-                    );
+                        // Constrain position within canvas bounds
+                        final constrainedX = localPosition.dx.clamp(
+                          0.0,
+                          canvasSize.width - 50,
+                        );
+                        final constrainedY = localPosition.dy.clamp(
+                          0.0,
+                          canvasSize.height - 50,
+                        );
 
-                    final newComponent = ComponentFactory.createComponent(
-                      componentType,
-                      constrainedX,
-                      constrainedY,
-                    );
+                        final newComponent = ComponentFactory.createComponent(
+                          componentType,
+                          constrainedX,
+                          constrainedY,
+                        );
 
-                    canvasController.onDragEnd(
-                      Offset(constrainedX, constrainedY),
-                      newComponent,
-                    );
-                  },
-                  builder: (context, candidateData, rejectedData) {
-                    final showDropIndicator = candidateData.isNotEmpty;
+                        canvasController.onDragEnd(
+                          Offset(constrainedX, constrainedY),
+                          newComponent,
+                        );
+                      },
+                      builder: (context, candidateData, rejectedData) {
+                        final showDropIndicator = candidateData.isNotEmpty;
 
-                    return Stack(
-                      children: [
-                        // Drop zone indicator
-                        if (showDropIndicator)
-                          Container(
-                            width: double.infinity,
-                            height: double.infinity,
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.1),
-                              border: Border.all(
-                                color: Colors.blue,
-                                width: 2.0,
-                                style: BorderStyle.solid,
+                        return Stack(
+                          children: [
+                            // Drop zone indicator
+                            if (showDropIndicator)
+                              Container(
+                                width: double.infinity,
+                                height: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withValues(alpha: 0.1),
+                                  border: Border.all(
+                                    color: Colors.blue,
+                                    width: 2.0,
+                                    style: BorderStyle.solid,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.add_circle_outline,
+                                    size: 48,
+                                    color: Colors.blue,
+                                  ),
+                                ),
                               ),
-                              borderRadius: BorderRadius.circular(8.0),
-                            ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.add_circle_outline,
-                                size: 48,
-                                color: Colors.blue,
-                              ),
-                            ),
-                          ),
 
-                        // Canvas boundaries indicator (subtle grid or guides)
-                        if (!showDropIndicator) _buildCanvasGuides(canvasSize),
+                            // Canvas boundaries indicator (subtle grid or guides)
+                            if (!showDropIndicator)
+                              _buildCanvasGuides(canvasSize),
 
-                        // Render existing components (visual only, no interactions)
-                        ...canvasController.components.map((component) {
-                          return _buildVisualComponentWidget(component);
-                        }),
+                            // Render existing components (visual only, no interactions)
+                            ...canvasController.components.map((component) {
+                              return _buildVisualComponentWidget(component);
+                            }),
 
-                        // Overlay layer for all interactions (dragging, resizing, selection)
-                        // IMPORTANT: This must be LAST (on top) to capture gestures
-                        ComponentOverlayLayer(canvasSize: canvasSize),
-                      ],
-                    );
-                  },
+                            // Overlay layer for all interactions (dragging, resizing, selection)
+                            // IMPORTANT: This must be LAST (on top) to capture gestures
+                            ComponentOverlayLayer(canvasSize: canvasSize),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           );
         }),
       ),

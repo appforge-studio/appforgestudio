@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utilities/pallet.dart';
+
 class PropertyTextField extends StatefulWidget {
   final String label;
   final String value;
@@ -32,22 +34,15 @@ class _PropertyTextFieldState extends State<PropertyTextField> {
   @override
   void didUpdateWidget(PropertyTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Only update the text if the widget value changed AND we don't have focus
-    // This allows external updates (like resize) to show up, 
-    // but prevents fighting with the user while they type
     if (widget.value != _controller.text && !_focusNode.hasFocus) {
-      // For numbers, we might want to check if they are effectively equal to avoid jumping
-      // e.g. "10" vs "10.0"
-      // But for now, direct string comparison is safer for exact sync
       _controller.text = widget.value;
     }
   }
 
   void _onFocusChange() {
     if (!_focusNode.hasFocus) {
-      // optionally re-sync on blur if needed
       if (widget.value != _controller.text) {
-          _controller.text = widget.value;
+        _controller.text = widget.value;
       }
     }
   }
@@ -62,27 +57,50 @@ class _PropertyTextFieldState extends State<PropertyTextField> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Text(
-          widget.label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
+        SizedBox(
+          width: 80, // Fixed width for label similar to old UI
+          child: Text(
+            "${widget.label}:",
+            style: TextStyle(fontSize: 13, color: Pallet.font1),
           ),
         ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _controller,
-          focusNode: _focusNode,
-          keyboardType: widget.keyboardType,
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            hintText: 'Enter ${widget.label.toLowerCase()}',
+        const SizedBox(width: 5),
+        Expanded(
+          child: SizedBox(
+            height: 30, // Compact height
+            child: TextFormField(
+              controller: _controller,
+              focusNode: _focusNode,
+              keyboardType: widget.keyboardType,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+              ), // Reduced font size
+              cursorColor: Colors.white70,
+              cursorHeight: 12,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Pallet.inside2,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(5),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
+                hintText: 'Enter ${widget.label.toLowerCase()}',
+                hintStyle: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 12,
+                ),
+              ),
+              onChanged: widget.onChanged,
+            ),
           ),
-          onChanged: widget.onChanged,
         ),
       ],
     );

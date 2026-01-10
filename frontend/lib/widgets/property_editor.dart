@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/property_editor_controller.dart';
+import '../utilities/pallet.dart';
 
 import '../models/common_property.dart';
 import '../models/component_properties.dart';
-import '../models/types/side.dart';
+
 import 'property_text_field.dart';
 
 import 'property_color_field.dart';
 import 'property_icon_field.dart';
+import 'property_side_field.dart';
 
 class EnablePropertyWrapper extends StatelessWidget {
   final Property property;
@@ -39,6 +41,9 @@ class EnablePropertyWrapper extends StatelessWidget {
               }
             },
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            activeColor: Pallet.inside3,
+            checkColor: Colors.white,
+            side: BorderSide(color: Pallet.font2),
           ),
         ),
         const SizedBox(width: 8),
@@ -63,14 +68,20 @@ class PropertyEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Get.find<PropertyEditorController>();
     return Obx(() {
+      // Always show container to maintain layout, but maybe empty or default text
       if (!controller.isVisible || controller.selectedComponent == null) {
         return Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          margin: const EdgeInsets.only(top: 10, bottom: 10, right: 10),
+          decoration: BoxDecoration(
+            color: Pallet.inside1,
+            borderRadius: BorderRadius.circular(20),
+          ),
           width: 300,
-          color: Colors.grey[100],
-          child: const Center(
+          child: Center(
             child: Text(
-              'Select a component to edit properties',
-              style: TextStyle(color: Colors.grey, fontSize: 16),
+              'Select a component',
+              style: TextStyle(color: Pallet.font2, fontSize: 13),
             ),
           ),
         );
@@ -79,38 +90,57 @@ class PropertyEditor extends StatelessWidget {
       final component = controller.selectedComponent!;
 
       return Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        margin: const EdgeInsets.only(top: 10, bottom: 10, right: 10),
+        decoration: BoxDecoration(
+          color: Pallet.inside1,
+          borderRadius: BorderRadius.circular(20),
+        ),
         width: 300,
-        color: Colors.grey[100],
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+            Padding(
+              padding: const EdgeInsets.only(left: 10),
+              child: Text(
+                "Properties",
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Pallet.font1,
+                ),
               ),
-              child: Row(
+            ),
+            const SizedBox(height: 5),
+            // Header Actions
+            SizedBox(
+              height: 30,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(left: 10),
                 children: [
-                  // Icon removed or can be generic if needed, using component name
-                  const Icon(Icons.tune, size: 20, color: Colors.blue),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${component.type.name.toUpperCase()} Properties',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  _buildHeaderAction(
+                    icon: Icons.question_mark,
+                    label: "Condition",
+                    color: Colors.blue,
+                    onTap: () {},
+                  ),
+                  _buildHeaderAction(
+                    icon: Icons.delete,
+                    label: "Delete",
+                    color: Colors.red,
+                    onTap: () {
+                      // Implement delete logic later
+                    },
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 10),
 
             // Property fields
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+                // padding: const EdgeInsets.all(16),
                 child: GenericPropertyEditor(
                   properties: component.properties,
                   onChanged: (newProperties) {
@@ -126,6 +156,34 @@ class PropertyEditor extends StatelessWidget {
         ),
       );
     });
+  }
+
+  Widget _buildHeaderAction({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          color: Pallet.inside1,
+          border: Border.all(color: Pallet.inside2),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 2),
+            Text(label, style: TextStyle(fontSize: 12, color: Pallet.font1)),
+            const SizedBox(width: 5),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -247,9 +305,18 @@ class GenericPropertyEditor extends StatelessWidget {
           const SizedBox(height: 8),
           DropdownButtonFormField<dynamic>(
             value: property.value,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: InputDecoration(
+              isDense: true,
+              filled: true,
+              fillColor: Pallet.inside2,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(5),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
             ),
             items: property.options.map<DropdownMenuItem<dynamic>>((option) {
               return DropdownMenuItem<dynamic>(
@@ -269,21 +336,19 @@ class GenericPropertyEditor extends StatelessWidget {
   }
 
   Widget _buildSideField(SideProperty property) {
+    List<String>? labels;
+    if (property.key == 'borderRadius') {
+      labels = ['tl', 'tr', 'br', 'bl'];
+    }
+
     return EnablePropertyWrapper(
       property: property,
       onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
-      child: PropertyTextField(
+      child: PropertySideField(
         label: property.displayName,
-        value: property.value.values.first.toString(),
-        keyboardType: TextInputType.number,
-        onChanged: (value) {
-          final numValue = double.tryParse(value);
-          if (numValue != null) {
-            // For simplicity, we'll update all sides with the same value
-            final newSide = XDSide.all(numValue);
-            _updateValue(property.key, newSide);
-          }
-        },
+        value: property.value,
+        onChanged: (newValue) => _updateValue(property.key, newValue),
+        labels: labels,
       ),
     );
   }

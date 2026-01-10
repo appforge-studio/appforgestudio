@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:get/get.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../services/arri_client.rpc.dart';
-import '../controllers/property_editor_controller.dart';
+
+import '../utilities/pallet.dart';
 
 class PropertyIconSelector extends StatefulWidget {
   final Function(String) onIconSelected;
@@ -82,21 +83,31 @@ class _PropertyIconSelectorState extends State<PropertyIconSelector> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      backgroundColor: Pallet.inside1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         width: 600,
         height: 500,
         padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Pallet.inside1,
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Column(
           children: [
             Row(
               children: [
-                const Text(
+                Text(
                   'Select Icon',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Pallet.font1,
+                  ),
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close, color: Pallet.font2),
                   onPressed: () => Get.back(),
                 ),
               ],
@@ -104,10 +115,17 @@ class _PropertyIconSelectorState extends State<PropertyIconSelector> {
             const SizedBox(height: 16),
             TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
+              style: TextStyle(color: Pallet.font1),
+              decoration: InputDecoration(
                 labelText: 'Search Icons',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.search),
+                labelStyle: TextStyle(color: Pallet.font3),
+                filled: true,
+                fillColor: Pallet.inside2,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                prefixIcon: Icon(Icons.search, color: Pallet.font3),
               ),
               onChanged: (value) {
                 debugPrint('Search input: $value');
@@ -145,25 +163,21 @@ class _PropertyIconSelectorState extends State<PropertyIconSelector> {
                     final svg = _svgs[index];
                     return InkWell(
                       onTap: () {
-                        widget.onIconSelected(
-                          svg.svg,
-                        ); // Passing content or name?
-                        // If we pass content, it's heavy. Ideally we pass name/ID and component fetches it.
-                        // But ComponentProperty expects a value.
-                        // TextComponent stores text content. ImageComponent stores URL.
-                        // IconComponent can store SVG content OR name.
-                        // If we store name, we need to fetch it at runtime.
-                        // Let's store the SVG CONTENT for now as it's self-contained.
                         widget.onIconSelected(svg.svg);
                         Get.back();
                       },
                       child: Tooltip(
                         message: svg.name,
                         child: Card(
+                          color: Pallet.inside2,
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: SvgPicture.string(
                               svg.svg,
+                              colorFilter: ColorFilter.mode(
+                                Pallet.font1,
+                                BlendMode.srcIn,
+                              ),
                               placeholderBuilder: (_) =>
                                   const Icon(Icons.error),
                             ),
