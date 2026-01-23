@@ -7,7 +7,13 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = dirname(__filename);
-config({ path: join(__dirname, "..", "..", ".env") });
+var possiblePaths = [
+  join(__dirname, ".env"),
+  join(__dirname, "..", "..", ".env")
+];
+for (const envPath of possiblePaths) {
+  config({ path: envPath });
+}
 var DATABASE_URL = process.env["DATABASE_URL"];
 var JWT_SECRET = process.env["JWT_SECRET"];
 var SMTP_HOST = process.env["SMTP_HOST"];
@@ -22,6 +28,11 @@ var AI_BASE_URL = process.env["AI_BASE_URL"];
 if (!DATABASE_URL) {
   throw new Error("Missing required environment var DATABASE_URL");
 }
+var env = {
+  DATABASE_URL,
+  JWT_SECRET,
+  GOOGLE_STUDIO_API_KEY
+};
 
 // src/app.ts
 import {
@@ -533,7 +544,8 @@ var app = new ArriApp({
     console.log("\u{1F4E5} Incoming request:", event.node.req.method, event.node.req.url);
     const origin = event.node.req.headers.origin;
     const allowedOrigins = [
-      "http://192.168.141.133:3000"
+      "http://192.168.141.133:3000",
+      "http://127.0.0.1:3000"
     ];
     const isLocalhost = origin?.startsWith("http://localhost:") || origin?.startsWith("http://127.0.0.1:");
     if (origin && (isLocalhost || allowedOrigins.includes(origin))) {
@@ -852,8 +864,8 @@ async function readAndFillTemplate(templatePath, replacements) {
   const template = await fs4.readFile(templatePath, "utf8");
   return fillTemplate(template, replacements);
 }
-function clearAndUpper(text4) {
-  return text4.replace(/-/, "").toUpperCase();
+function clearAndUpper(text6) {
+  return text6.replace(/-/, "").toUpperCase();
 }
 async function getAvailableComponents(rootDir) {
   const componentsDir = join2(rootDir, "frontend", "lib", "components");
@@ -879,7 +891,7 @@ async function generateComponentFactories() {
   const rootDir = getProjectRoot();
   const components2 = await getAvailableComponents(rootDir);
   const templatesDir = join2(rootDir, "backend", "src", "templates", "components");
-  components2.sort((a9, b) => a9.name.localeCompare(b.name));
+  components2.sort((a12, b) => a12.name.localeCompare(b.name));
   const imports = components2.map(
     (c) => `import '../components/${c.name}/component.dart';
 import '../components/${c.name}/properties.dart';`
@@ -900,6 +912,10 @@ import '../components/${c.name}/properties.dart';`
   const casesGetDefaultPropertiesFactory = components2.map(
     (c) => `      case ComponentType.${c.name}:
         return ${c.className}Properties.createDefault();`
+  ).join("\n");
+  const casesGetValidators = components2.map(
+    (c) => `      case ComponentType.${c.name}:
+        return ${c.className}Properties.validators;`
   ).join("\n");
   const casesCreateWithProperties = components2.map(
     (c) => `      case ComponentType.${c.name}:
@@ -928,7 +944,8 @@ import '../components/${c.name}/properties.dart';`
   const propertiesFactoryImports = components2.map((c) => `import '${c.name}/properties.dart';`).join("\n");
   const componentPropertiesFactoryContent = await readAndFillTemplate(join2(templatesDir, "component_properties_factory.dart.tpl"), {
     IMPORTS: propertiesFactoryImports,
-    CASES_GET_DEFAULT_PROPERTIES: casesGetDefaultPropertiesFactory
+    CASES_GET_DEFAULT_PROPERTIES: casesGetDefaultPropertiesFactory,
+    CASES_GET_VALIDATORS: casesGetValidators
   });
   const componentsExportContent = await readAndFillTemplate(join2(templatesDir, "components.dart.tpl"), {
     EXPORTS: exports
@@ -947,54 +964,82 @@ async function createComponentFiles(options) {
   const templatesDir = join2(rootDir, "backend", "src", "templates", "components");
   await fs4.mkdir(componentDir, { recursive: true });
   const propertiesCode = properties.map((prop) => {
+    const displayName = prop.displayName || prop.name;
     switch (prop.type) {
       case "string":
         return `      const StringProperty(
         key: '${prop.name}',
-        displayName: '${prop.name}',
+        displayName: '${displayName}',
         value: '${prop.initialValue}',
+        group: '${prop.group ?? "General"}',
         enable: Enabled(show: true, enabled: true),
       ),`;
       case "number":
         return `      const NumberProperty(
         key: '${prop.name}',
-        displayName: '${prop.name}',
+        displayName: '${displayName}',
         value: ${prop.initialValue},
         min: 0.0,
         max: 1000.0,
+        group: '${prop.group ?? "General"}',
         enable: Enabled(show: true, enabled: true),
       ),`;
       case "boolean":
         return `      const BooleanProperty(
         key: '${prop.name}',
-        displayName: '${prop.name}',
+        displayName: '${displayName}',
         value: ${prop.initialValue},
+        group: '${prop.group ?? "General"}',
         enable: Enabled(show: true, enabled: true),
       ),`;
       case "color":
         return `      const ComponentColorProperty(
         key: '${prop.name}',
-        displayName: '${prop.name}',
+        displayName: '${displayName}',
         value: XDColor(
              ['${prop.initialValue}'],
              type: ColorType.solid,
              stops: [],
              begin: Alignment.topLeft,
              end: Alignment.bottomRight,
-        ),
+         ),
         enable: Enabled(show: true, enabled: true),
+        group: '${prop.group ?? "General"}',
       ),`;
       case "icon":
         return `      const IconProperty(
             key: '${prop.name}',
-            displayName: '${prop.name}',
+            displayName: '${displayName}',
             value: '${prop.initialValue}',
+            group: '${prop.group ?? "General"}',
             enable: Enabled(show: false, enabled: true),
           ),`;
       default:
         return "";
     }
   }).join("\n");
+  const validationLogic = `static Map<String, String? Function(dynamic)> get validators => {
+${properties.map((prop) => {
+    switch (prop.type) {
+      case "string":
+      case "icon":
+        return `    '${prop.name}': (value) => value is String ? null : '${prop.name} must be a string',`;
+      case "number":
+        return `    '${prop.name}': (value) => value is num ? null : '${prop.name} must be a number',`;
+      case "boolean":
+        return `    '${prop.name}': (value) => value is bool ? null : '${prop.name} must be a boolean',`;
+      case "color":
+        return `    '${prop.name}': (value) {
+      if (value is XDColor) return null;
+      if (value is String && (value.startsWith('#') || value.startsWith('0x'))) return null;
+      if (value is Map && value.containsKey('value')) return null; // JSON structure for color
+      return '${prop.name} must be a valid color (Hex string, XDColor, or JSON object)';
+    },`;
+      default:
+        return `    '${prop.name}': (value) => null,`;
+    }
+  }).join("\n")}
+  };`;
   let componentContent = componentCode;
   if (!componentContent || componentContent.trim().length === 0) {
     componentContent = await readAndFillTemplate(join2(templatesDir, "component_class.dart.tpl"), {
@@ -1005,7 +1050,8 @@ async function createComponentFiles(options) {
   }
   const propertiesContent = await readAndFillTemplate(join2(templatesDir, "component_properties.dart.tpl"), {
     CLASS_NAME: className,
-    PROPERTIES_CODE: propertiesCode
+    PROPERTIES_CODE: propertiesCode,
+    VALIDATION_LOGIC: validationLogic
   });
   await fs4.writeFile(join2(componentDir, "component.dart"), componentContent);
   await fs4.writeFile(join2(componentDir, "properties.dart"), propertiesContent);
@@ -1464,9 +1510,12 @@ var update_type_definition_rpc_default = defineRpc7({
   }
 });
 
-// src/procedures/svg/get_svgs.rpc.ts
-import { a as a8 } from "@arrirpc/schema";
+// src/procedures/ai/generate_design.rpc.ts
 import { defineRpc as defineRpc8 } from "@arrirpc/server";
+import { a as a8 } from "@arrirpc/schema";
+
+// src/services/aiService.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // ../database/schema/svgs.ts
 import { pgTable as pgTable3, text as text3, varchar as varchar4, boolean as boolean3 } from "drizzle-orm/pg-core";
@@ -1480,24 +1529,448 @@ var svgs = pgTable3("svgs", {
   ...defaultDateFields
 });
 
-// src/procedures/svg/get_svgs.rpc.ts
-import { or, count, ilike, desc as desc2 } from "drizzle-orm";
-var get_svgs_rpc_default = defineRpc8({
-  params: a8.object("GetSvgsParams", {
-    limit: a8.int32(),
-    offset: a8.int32(),
-    search: a8.nullable(a8.string())
+// ../database/schema/ai_cache.ts
+import { pgTable as pgTable4, text as text4, varchar as varchar5, index } from "drizzle-orm/pg-core";
+var aiDesignCache = pgTable4("ai_design_cache", {
+  id: ulidField("id").primaryKey(),
+  prompt: text4("prompt").notNull().unique(),
+  designJson: text4("design_json").notNull(),
+  modelUsed: varchar5("model_used", { length: 255 }).notNull(),
+  ...defaultDateFields
+}, (table) => {
+  return {
+    promptIndex: index("ai_design_cache_prompt_idx").on(table.prompt)
+  };
+});
+
+// ../database/schema/ai_sessions.ts
+import { pgTable as pgTable5, text as text5, varchar as varchar6, timestamp as timestamp2, index as index2 } from "drizzle-orm/pg-core";
+var aiDesignSessions = pgTable5("ai_design_sessions", {
+  id: ulidField("id").primaryKey(),
+  // Usually generated by frontend
+  ...defaultDateFields
+});
+var aiDesignMessages = pgTable5("ai_design_messages", {
+  id: ulidField("id").primaryKey(),
+  sessionId: ulidField("session_id").notNull().references(() => aiDesignSessions.id, { onDelete: "cascade" }),
+  role: varchar6("role", { length: 20 }).notNull(),
+  // 'user' | 'assistant'
+  content: text5("content").notNull(),
+  // Prompt or JSON
+  createdAt: timestamp2("created_at", { mode: "date" }).notNull().defaultNow()
+}, (table) => {
+  return {
+    sessionIdx: index2("ai_design_messages_session_idx").on(table.sessionId)
+  };
+});
+
+// src/services/aiService.ts
+import { eq as eq4, asc } from "drizzle-orm";
+import { ulid as ulid4 } from "ulidx";
+var AiService = class {
+  static genAI = new GoogleGenerativeAI(env.GOOGLE_STUDIO_API_KEY || "");
+  static async generateDesign(prompt, sessionId, isIteration = false) {
+    const model = this.genAI.getGenerativeModel({
+      model: "gemini-flash-latest",
+      generationConfig: {
+        responseMimeType: "application/json"
+      }
+    });
+    const db2 = getDrizzle();
+    const allComponents = await db2.select().from(components);
+    const allSvgs = await db2.select({ name: svgs.name }).from(svgs);
+    const componentTypesList = allComponents.map((c) => `"${c.name}"`).join(" | ");
+    const svgNamesList = allSvgs.map((s) => `"${s.name}"`).join(", ");
+    const dynamicPropertiesSchema = allComponents.map((comp) => {
+      let props = [];
+      try {
+        props = JSON.parse(comp.properties);
+      } catch (e) {
+        return "";
+      }
+      const propLines = props.map((p) => {
+        let typeDesc = "any";
+        switch (p.type) {
+          case "string":
+            typeDesc = "string";
+            break;
+          case "number":
+            typeDesc = "double";
+            break;
+          case "boolean":
+            typeDesc = "boolean";
+            break;
+          case "color":
+            typeDesc = '"#AARRGGBB" (Hex String)';
+            break;
+          case "icon":
+            typeDesc = "string (Material Icon name)";
+            break;
+          default:
+            typeDesc = "any";
+        }
+        return `"${p.name}": ${typeDesc}`;
+      }).join(",\n        ");
+      return `// PROPERTIES FOR "${comp.name}"
+        ${propLines}`;
+    }).join("\n\n        ");
+    const schemaDescription = `
+    You are a UI design generator. Output strictly valid JSON matching this schema for a Flutter app design canvas.
+    
+    ROOT OBJECT:
+    {
+      "components": [ ... list of component objects ... ],
+      "canvasSize": { "width": 375.0, "height": 812.0 }, // Standard mobile size
+      "selectedComponent": null, // Always null initially
+      "isDragging": false,
+      "isPropertyEditorVisible": false
+    }
+
+    COMPONENT OBJECT:
+    {
+      "id": "unique_string_id",
+      "type": ${componentTypesList},
+      "x": double (position),
+      "y": double (position),
+      "resizable": true,
+      "properties": {
+        // Use simple direct values for properties
+        
+        // DYNAMICALLY GENERATED PROPERTIES FROM DATABASE
+        ${dynamicPropertiesSchema}
+      }
+    }
+
+    IMPORTANT RULES:
+    1. Every component MUST have a unique "id".
+    2. All properties MUST be simple direct values (string, number, boolean, or hex string for colors).
+    3. Colors MUST be Hex strings (e.g. "#FF0000" or "#AARRGGBB").
+    4. For any "icon" property, you MUST use ONLY one of these valid names: [${svgNamesList}].
+    5. Generate a complete, beautiful design based on the user prompt: "${prompt}".
+    6. Ensure components are positioned logically.
+    `;
+    let currentPrompt = schemaDescription;
+    let attempts = 0;
+    const maxAttempts = 3;
+    const modelName = "gemini-flash-latest";
+    if (!isIteration) {
+      try {
+        const cached = await db2.select().from(aiDesignCache).where(eq4(aiDesignCache.prompt, prompt)).limit(1);
+        if (cached && cached.length > 0) {
+          const entry = cached[0];
+          if (entry) {
+            console.log("\u{1F680} Cache HIT for prompt:", prompt);
+            return JSON.parse(entry.designJson);
+          }
+        }
+        console.log("\u{1F311} Cache MISS for prompt:", prompt);
+      } catch (e) {
+        console.error("\u26A0\uFE0F Cache lookup error:", e);
+      }
+    }
+    console.log("----------------------------------------------------------------");
+    console.log("\u{1F916} GENERATED AI PROMPT:");
+    console.log(currentPrompt);
+    console.log("----------------------------------------------------------------");
+    while (attempts < maxAttempts) {
+      try {
+        console.log(`\u{1F916} AI Generation Attempt ${attempts + 1}/${maxAttempts}`);
+        console.log("\u23F3 Waiting for Gemini API response...");
+        const result = await model.generateContent(currentPrompt);
+        console.log("\u2705 Received response from Gemini API");
+        console.log("\u23F3 Extracting text from response...");
+        const responseText = result.response.text();
+        console.log("\u2705 Text extracted");
+        let json;
+        try {
+          console.log("\u23F3 Parsing JSON...");
+          json = JSON.parse(responseText);
+          console.log("\u2705 JSON parsed successfully");
+        } catch (e) {
+          console.error("\u274C Failed to parse JSON:", responseText);
+          throw new Error("Invalid JSON returned by AI");
+        }
+        const errors = this.validateDesignJson(json);
+        if (errors.length === 0) {
+          if (!isIteration && attempts === 0) {
+            try {
+              await db2.insert(aiDesignCache).values({
+                id: ulid4(),
+                prompt,
+                designJson: JSON.stringify(json),
+                modelUsed: modelName
+              }).onConflictDoUpdate({
+                target: aiDesignCache.prompt,
+                set: { designJson: JSON.stringify(json), modelUsed: modelName }
+              });
+              console.log("\u2705 Saved to cache (initial successful attempt)");
+            } catch (e) {
+              console.error("\u26A0\uFE0F Failed to save to cache:", e);
+            }
+          } else if (attempts > 0) {
+            console.log("\u2139\uFE0F Skipping cache save for fixing prompt (attempt > 0)");
+          } else if (isIteration) {
+            console.log("\u2139\uFE0F Skipping cache save for iteration prompt");
+          }
+          if (sessionId) {
+            try {
+              const db3 = getDrizzle();
+              await db3.insert(aiDesignSessions).values({ id: sessionId }).onConflictDoNothing();
+              await db3.insert(aiDesignMessages).values({
+                id: ulid4(),
+                sessionId,
+                role: "user",
+                content: prompt
+              });
+              await db3.insert(aiDesignMessages).values({
+                id: ulid4(),
+                sessionId,
+                role: "assistant",
+                content: JSON.stringify(json)
+              });
+              console.log("\u2705 Recorded messages in session:", sessionId);
+            } catch (e) {
+              console.error("\u26A0\uFE0F Failed to record session message:", e);
+            }
+          }
+          return json;
+        }
+        console.warn("\u26A0\uFE0F Validation Errors:", errors);
+        currentPrompt = `
+        The previous JSON had the following errors:
+${errors.join("\n")}
+
+        Please fix these errors and return the valid JSON again.
+        Original Prompt: ${schemaDescription}
+        `;
+        attempts++;
+      } catch (error) {
+        console.error("\u274C AI Generation Error:", error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log("Waiting 5 seconds before retry...");
+          await new Promise((resolve5) => setTimeout(resolve5, 5e3));
+        }
+      }
+    }
+    throw new Error("Failed to generate valid design after multiple attempts");
+  }
+  static async iterateDesign(sessionId, prompt) {
+    const db2 = getDrizzle();
+    const history = await db2.select().from(aiDesignMessages).where(eq4(aiDesignMessages.sessionId, sessionId)).orderBy(asc(aiDesignMessages.createdAt));
+    if (history.length === 0) {
+      return this.generateDesign(prompt, sessionId, false);
+    }
+    let lastDesignJson = "";
+    for (let i = history.length - 1; i >= 0; i--) {
+      const entry = history[i];
+      if (entry && entry.role === "assistant") {
+        lastDesignJson = entry.content;
+        break;
+      }
+    }
+    const contextPrompt = `
+    The user is iterating on a previous design.
+    ${lastDesignJson ? `PREVIOUS DESIGN JSON:
+${lastDesignJson}
+` : ""}
+    
+    USER FEEDBACK / REQUEST:
+    "${prompt}"
+    
+    Based on the previous design and the user's feedback, provide an updated, corrected JSON.
+    Maintain the overall structure but apply the requested changes carefully.
+    `;
+    return this.generateDesign(contextPrompt, sessionId, true);
+  }
+  static validateDesignJson(json) {
+    const errors = [];
+    if (!json.components || !Array.isArray(json.components)) {
+      errors.push("Root object missing 'components' array");
+      return errors;
+    }
+    json.components.forEach((comp, index3) => {
+      if (!comp.type) errors.push(`Component[${index3}] missing type`);
+      if (typeof comp.x === "string") {
+        const parsed = parseFloat(comp.x);
+        if (!isNaN(parsed)) comp.x = parsed;
+      }
+      if (typeof comp.y === "string") {
+        const parsed = parseFloat(comp.y);
+        if (!isNaN(parsed)) comp.y = parsed;
+      }
+      if (typeof comp.x !== "number") errors.push(`Component[${index3}] invalid x`);
+      if (typeof comp.y !== "number") errors.push(`Component[${index3}] invalid y`);
+      if (!comp.properties) {
+        errors.push(`Component[${index3}] missing properties`);
+      } else {
+        Object.keys(comp.properties).forEach((key) => {
+          const val = comp.properties[key];
+          if (typeof val === "string" && val.trim() !== "" && !isNaN(Number(val)) && !val.startsWith("#")) {
+            comp.properties[key] = parseFloat(val);
+          }
+        });
+      }
+    });
+    return errors;
+  }
+};
+
+// src/procedures/ai/generate_design.rpc.ts
+var generate_design_rpc_default = defineRpc8({
+  params: a8.object("GenerateDesignParams", {
+    prompt: a8.string(),
+    sessionId: a8.string()
+    // Changed from optional to avoid generator bug
   }),
-  response: a8.object("GetSvgsResponse", {
+  response: a8.object("GenerateDesignResponse", {
     success: a8.boolean(),
     message: a8.string(),
-    total: a8.int32(),
-    svgs: a8.array(
-      a8.object("SvgInfo", {
-        id: a8.string(),
-        name: a8.string(),
-        svg: a8.string(),
-        type: a8.string()
+    // Changed from nullable
+    data: a8.any()
+  }),
+  handler: async ({ params }) => {
+    try {
+      const effectiveSessionId = params.sessionId || void 0;
+      const designJson = await AiService.generateDesign(params.prompt, effectiveSessionId);
+      const responseStr = JSON.stringify(designJson);
+      console.log(`\u2705 Design generated. Size: ${(responseStr.length / 1024).toFixed(2)} KB`);
+      return {
+        success: true,
+        data: designJson,
+        message: ""
+      };
+    } catch (error) {
+      console.error("Design generation failed:", error);
+      return {
+        success: false,
+        message: error.message || "Unknown error occurred during generation",
+        data: null
+      };
+    }
+  }
+});
+
+// src/procedures/ai/generate_image.rpc.ts
+import { defineRpc as defineRpc9 } from "@arrirpc/server";
+import { a as a9 } from "@arrirpc/schema";
+var generate_image_rpc_default = defineRpc9({
+  params: a9.object("GenerateImageParams", {
+    prompt: a9.string(),
+    negativePrompt: a9.optional(a9.string()),
+    width: a9.optional(a9.number()),
+    height: a9.optional(a9.number()),
+    steps: a9.optional(a9.number())
+  }),
+  response: a9.object("GenerateImageResponse", {
+    success: a9.boolean(),
+    message: a9.string(),
+    url: a9.optional(a9.string())
+  }),
+  handler: async ({ params }) => {
+    console.log("!!! [Backend RPC] generate_image HIT !!!");
+    console.log("Params:", JSON.stringify(params));
+    try {
+      const aiServerUrl = process.env["AI_BASE_URL"] || process.env["AI_SERVER_URL"] || "http://localhost:5000";
+      const fullUrl = `${aiServerUrl}/generate-image`;
+      console.log(`\u{1F50C} Connecting to AI server at: ${fullUrl}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3e5);
+      console.log("\u23F3 Waiting for AI server response...");
+      const response = await fetch(fullUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          prompt: params.prompt,
+          negative_prompt: params.negativePrompt || "",
+          width: params.width || 512,
+          height: params.height || 512,
+          steps: params.steps || 25
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `AI server returned ${response.status}`);
+      }
+      const imageBuffer = await response.arrayBuffer();
+      console.log("\u2705 Image received from AI server, size:", imageBuffer.byteLength);
+      const uploadResult = await mediaServer.uploadMedia({
+        originalName: `generated-${Date.now()}.png`,
+        bytes: Buffer.from(imageBuffer),
+        contentType: "image/png",
+        directory: "generated"
+      });
+      return {
+        success: true,
+        message: "Image generated and uploaded successfully",
+        url: uploadResult.url
+      };
+    } catch (error) {
+      console.error("\u274C Image generation failed:", error);
+      return {
+        success: false,
+        message: error.message || "Unknown error occurred during image generation"
+      };
+    }
+  }
+});
+
+// src/procedures/ai/iterate_design.rpc.ts
+import { defineRpc as defineRpc10 } from "@arrirpc/server";
+import { a as a10 } from "@arrirpc/schema";
+var iterate_design_rpc_default = defineRpc10({
+  params: a10.object({
+    sessionId: a10.string(),
+    prompt: a10.string()
+  }),
+  response: a10.object({
+    success: a10.boolean(),
+    message: a10.string(),
+    data: a10.any()
+  }),
+  handler: async ({ params }) => {
+    try {
+      const resultJson = await AiService.iterateDesign(params.sessionId, params.prompt);
+      return {
+        success: true,
+        message: "",
+        data: resultJson
+      };
+    } catch (error) {
+      console.error("\u274C Iterate Design Error:", error);
+      return {
+        success: false,
+        message: error.message || "Failed to iterate design",
+        data: null
+      };
+    }
+  }
+});
+
+// src/procedures/svg/get_svgs.rpc.ts
+import { a as a11 } from "@arrirpc/schema";
+import { defineRpc as defineRpc11 } from "@arrirpc/server";
+import { or, count, ilike, desc as desc2 } from "drizzle-orm";
+var get_svgs_rpc_default = defineRpc11({
+  params: a11.object("GetSvgsParams", {
+    limit: a11.int32(),
+    offset: a11.int32(),
+    search: a11.string()
+  }),
+  response: a11.object("GetSvgsResponse", {
+    success: a11.boolean(),
+    message: a11.string(),
+    total: a11.int32(),
+    svgs: a11.array(
+      a11.object("SvgInfo", {
+        id: a11.string(),
+        name: a11.string(),
+        svg: a11.string(),
+        type: a11.string()
       })
     )
   }),
@@ -1562,6 +2035,9 @@ app_default.rpc("admin.get_types", get_types_rpc_default);
 app_default.rpc("admin.save_type_code", save_type_code_rpc_default);
 app_default.rpc("admin.update_component", update_component_rpc_default);
 app_default.rpc("admin.update_type_definition", update_type_definition_rpc_default);
+app_default.rpc("ai.generate_design", generate_design_rpc_default);
+app_default.rpc("ai.generate_image", generate_image_rpc_default);
+app_default.rpc("ai.iterate_design", iterate_design_rpc_default);
 app_default.rpc("svg.get_svgs", get_svgs_rpc_default);
 var arri_app_default = app_default;
 export {

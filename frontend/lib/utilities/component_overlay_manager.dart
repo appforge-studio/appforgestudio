@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../controllers/canvas_controller.dart';
 import '../models/component_model.dart';
+import '../models/state_classes.dart';
 import 'component_dimensions.dart';
 
 /// Unified manager for all component overlay interactions
@@ -51,73 +52,99 @@ class ComponentOverlayManager {
     required CanvasController controller,
     required Size canvasSize,
   }) {
-    final isSelected = controller.selectedComponent?.id == component.id;
-    final isDragging =
-        controller.isDraggingComponent &&
-        controller.draggingComponentId == component.id;
-    final isResizing =
-        controller.isResizingComponent &&
-        controller.resizingComponentId == component.id;
-
-    final width = ComponentDimensions.getWidth(component);
-    final height = ComponentDimensions.getHeight(component);
-
-    // Use explicit size from properties if available,
-    // otherwise fallback to measured detectedSize
-    final componentWidth = width ?? component.detectedSize?.width ?? 0.0;
-    final componentHeight = height ?? component.detectedSize?.height ?? 0.0;
-
     return Positioned(
       left: component.x,
       top: component.y,
-      child: SizedBox(
-        width: componentWidth,
-        height: componentHeight,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Main interaction area
-            _buildMainInteractionArea(
-              component: component,
-              controller: controller,
-              canvasSize: canvasSize,
-              width: componentWidth,
-              height: componentHeight,
-              isDragging: isDragging,
-              isResizing: isResizing,
+      child: Obx(() {
+        final isSelected = controller.selectedComponentIds.contains(
+          component.id,
+        );
+        final isDragging =
+            controller.isDraggingComponent &&
+            controller.draggingComponentId == component.id;
+        final isResizing =
+            controller.isResizingComponent &&
+            controller.resizingComponentId == component.id;
+
+        // Interaction state
+        final interaction = controller.getInteractionState(component.id);
+
+        double dx = 0;
+        double dy = 0;
+
+        // Base dimensions
+        final baseWidth = ComponentDimensions.getWidth(component);
+        final baseHeight = ComponentDimensions.getHeight(component);
+
+        double componentWidth =
+            baseWidth ?? component.detectedSize?.width ?? 0.0;
+        double componentHeight =
+            baseHeight ?? component.detectedSize?.height ?? 0.0;
+
+        // Apply transient updates
+        if (interaction != null) {
+          if (interaction.position != null) {
+            dx = interaction.position!.dx - component.x;
+            dy = interaction.position!.dy - component.y;
+          }
+          if (interaction.size != null) {
+            componentWidth = interaction.size!.width;
+            componentHeight = interaction.size!.height;
+          }
+        }
+
+        return Transform.translate(
+          offset: Offset(dx, dy),
+          child: SizedBox(
+            width: componentWidth,
+            height: componentHeight,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Main interaction area
+                _buildMainInteractionArea(
+                  component: component,
+                  controller: controller,
+                  canvasSize: canvasSize,
+                  width: componentWidth,
+                  height: componentHeight,
+                  isDragging: isDragging,
+                  isResizing: isResizing,
+                ),
+
+                // Selection indicator
+                if (isSelected)
+                  _buildSelectionIndicator(
+                    isDragging: isDragging,
+                    isResizing: isResizing,
+                    component: component,
+                    controller: controller,
+                    width: componentWidth,
+                    height: componentHeight,
+                  ),
+
+                // Resize handles (visible when selected)
+                if (isSelected && component.resizable && !isDragging)
+                  ..._buildResizeHandles(
+                    component: component,
+                    controller: controller,
+                    width: componentWidth,
+                    height: componentHeight,
+                  ),
+
+                // Edge detection zones (invisible, for cursor feedback)
+                if (component.resizable && !isDragging && !isResizing)
+                  ..._buildEdgeDetectionZones(
+                    component: component,
+                    controller: controller,
+                    width: componentWidth,
+                    height: componentHeight,
+                  ),
+              ],
             ),
-
-            // Selection indicator
-            if (isSelected)
-              _buildSelectionIndicator(
-                isDragging: isDragging,
-                isResizing: isResizing,
-                component: component,
-                controller: controller,
-                width: componentWidth,
-                height: componentHeight,
-              ),
-
-            // Resize handles (visible when selected)
-            if (isSelected && component.resizable && !isDragging)
-              ..._buildResizeHandles(
-                component: component,
-                controller: controller,
-                width: componentWidth,
-                height: componentHeight,
-              ),
-
-            // Edge detection zones (invisible, for cursor feedback)
-            if (component.resizable && !isDragging && !isResizing)
-              ..._buildEdgeDetectionZones(
-                component: component,
-                controller: controller,
-                width: componentWidth,
-                height: componentHeight,
-              ),
-          ],
-        ),
-      ),
+          ),
+        );
+      }),
     );
   }
 
@@ -144,12 +171,11 @@ class ComponentOverlayManager {
           isResizing: isResizing,
         ),
         child: GestureDetector(
-          behavior: HitTestBehavior.opaque, // Block taps from reaching parent
+          behavior: HitTestBehavior
+              .opaque, // Capture events for component interactions
           onTap: () {
-            if (!isDragging && !isResizing) {
-              debugPrint(
-                '🎯 Component tap detected - selecting component ${component.id}',
-              );
+            // Don't select component if box selection is active
+            if (!isDragging && !isResizing && !controller.isBoxSelecting) {
               controller.onComponentSelected(component);
             }
           },
@@ -157,8 +183,12 @@ class ComponentOverlayManager {
             _showContextMenu(details, component, controller);
           },
           onPanStart: (details) {
-            if (!isResizing) {
-              controller.onComponentSelected(component);
+            // Don't start component drag if box selection is active
+            if (!isResizing && !controller.isBoxSelecting) {
+              // If component is already selected, don't re-select (prevents clearing other selections)
+              if (!controller.selectedComponentIds.contains(component.id)) {
+                controller.onComponentSelected(component);
+              }
               _handleDragStart(controller, component.id, details);
             }
           },
@@ -215,15 +245,6 @@ class ComponentOverlayManager {
                   width: isDragging || isResizing ? 3.0 : 2.0,
                 ),
                 borderRadius: BorderRadius.circular(4.0),
-                boxShadow: isDragging || isResizing
-                    ? [
-                        BoxShadow(
-                          color: selectionColor.withValues(alpha: 0.3),
-                          blurRadius: 8.0,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : null,
               ),
             ),
           ),
@@ -428,12 +449,21 @@ class ComponentOverlayManager {
     }
   }
 
-  // Drag handlers
   static void _handleDragStart(
     CanvasController controller,
     String componentId,
     DragStartDetails details,
   ) {
+    // Cancel box selection if component drag starts
+    if (controller.isBoxSelecting) {
+      controller.endBoxSelection();
+    }
+
+    // Start interaction for all selected components
+    for (final id in controller.selectedComponentIds) {
+      controller.startInteraction(id);
+    }
+
     controller.setDragState(componentId, true);
   }
 
@@ -445,23 +475,41 @@ class ComponentOverlayManager {
     required double width,
     required double height,
   }) {
-    // Get the CURRENT component state from controller (not the stale one from gesture start)
-    final currentComponent = controller.getComponentById(component.id);
-    if (currentComponent == null) return;
+    // Iterate over ALL selected components
+    for (final id in controller.selectedComponentIds) {
+      final currentComponent = controller.getComponentById(id);
+      if (currentComponent == null) continue;
 
-    // Calculate new position with boundary constraints using CURRENT position
-    final newX = (currentComponent.x + details.delta.dx).clamp(
-      0.0,
-      canvasSize.width - width,
-    );
-    final newY = (currentComponent.y + details.delta.dy).clamp(
-      0.0,
-      canvasSize.height - height,
-    );
+      // Check for transient state first, fallback to stable state
+      final interaction = controller.getInteractionState(id);
+      final currentX = interaction?.position?.dx ?? currentComponent.x;
+      final currentY = interaction?.position?.dy ?? currentComponent.y;
 
-    // Update component position
-    final updatedComponent = currentComponent.copyWith(x: newX, y: newY);
-    controller.updateComponent(updatedComponent);
+      // Determine dimensions for clamping
+      final compWidth =
+          interaction?.size?.width ??
+          ComponentDimensions.getWidth(currentComponent) ??
+          currentComponent.detectedSize?.width ??
+          0.0;
+      final compHeight =
+          interaction?.size?.height ??
+          ComponentDimensions.getHeight(currentComponent) ??
+          currentComponent.detectedSize?.height ??
+          0.0;
+
+      // Calculate new position with boundary constraints using CURRENT position
+      final newX = (currentX + details.delta.dx).clamp(
+        0.0,
+        canvasSize.width - compWidth,
+      );
+      final newY = (currentY + details.delta.dy).clamp(
+        0.0,
+        canvasSize.height - compHeight,
+      );
+
+      // Update transient state
+      controller.updateInteraction(id, position: Offset(newX, newY));
+    }
   }
 
   static void _handleDragEnd(
@@ -469,6 +517,10 @@ class ComponentOverlayManager {
     String componentId,
     DragEndDetails details,
   ) {
+    // Commit interaction for all selected components
+    for (final id in controller.selectedComponentIds) {
+      controller.commitInteraction(id);
+    }
     controller.setDragState(componentId, false);
   }
 
@@ -478,6 +530,11 @@ class ComponentOverlayManager {
     String componentId,
     String handle,
   ) {
+    // Cancel box selection if resize starts
+    if (controller.isBoxSelecting) {
+      controller.endBoxSelection();
+    }
+    controller.startInteraction(componentId);
     controller.setResizeState(componentId, true, handle: handle);
   }
 
@@ -488,12 +545,128 @@ class ComponentOverlayManager {
   ) {
     if (controller.isResizingComponent &&
         controller.resizingComponentId == componentId) {
-      controller.resizeComponent(
-        componentId,
-        details.delta.dx,
-        details.delta.dy,
+      final component = controller.getComponentById(componentId);
+      if (component == null) return;
+
+      // Check interaction state, fallback to component
+      final interaction = controller.getInteractionState(componentId);
+      // Logic from reuse resizeComponent but optimized for transient updates...
+      // Since resize logic is complex and inside controller, we should duplicate logic here
+      // OR refactor controller.resizeComponent to support transient mode.
+      // For now, let's call a new method on controller: resizeComponentTransient
+      // But wait, I didn't add that.
+      // Let's implement the logic briefly here or assume we call the param update
+
+      // Calculate delta
+      final dx = details.delta.dx;
+      final dy = details.delta.dy;
+
+      _handleTransientResize(
+        controller,
+        component,
+        dx,
+        dy,
+        controller.resizeHandle,
       );
     }
+  }
+
+  static void _handleTransientResize(
+    CanvasController controller,
+    ComponentModel component,
+    double deltaX,
+    double deltaY,
+    String handle,
+  ) {
+    final interaction = controller.getInteractionState(component.id);
+    final currentWidth =
+        interaction?.size?.width ??
+        ComponentDimensions.getWidth(component) ??
+        100.0;
+    final currentHeight =
+        interaction?.size?.height ??
+        ComponentDimensions.getHeight(component) ??
+        100.0;
+    final currentX = interaction?.position?.dx ?? component.x;
+    final currentY = interaction?.position?.dy ?? component.y;
+
+    double newWidth = currentWidth;
+    double newHeight = currentHeight;
+    double newX = currentX;
+    double newY = currentY;
+
+    final canvasSize = controller.canvasSize;
+
+    // .... Copy paste case swtich logic from controller but using local variables
+    switch (handle) {
+      case 'se': // Southeast - resize width and height
+        newWidth = (currentWidth + deltaX).clamp(
+          20.0,
+          canvasSize.width - currentX,
+        );
+        newHeight = (currentHeight + deltaY).clamp(
+          20.0,
+          canvasSize.height - currentY,
+        );
+        break;
+      case 'sw': // Southwest - resize width (left) and height
+        newWidth = (currentWidth - deltaX).clamp(20.0, currentX + currentWidth);
+        newHeight = (currentHeight + deltaY).clamp(
+          20.0,
+          canvasSize.height - currentY,
+        );
+        newX = currentX + (currentWidth - newWidth);
+        break;
+      case 'ne': // Northeast - resize width and height (top)
+        newWidth = (currentWidth + deltaX).clamp(
+          20.0,
+          canvasSize.width - currentX,
+        );
+        newHeight = (currentHeight - deltaY).clamp(
+          20.0,
+          currentY + currentHeight,
+        );
+        newY = currentY + (currentHeight - newHeight);
+        break;
+      case 'nw': // Northwest - resize width (left) and height (top)
+        newWidth = (currentWidth - deltaX).clamp(20.0, currentX + currentWidth);
+        newHeight = (currentHeight - deltaY).clamp(
+          20.0,
+          currentY + currentHeight,
+        );
+        newX = currentX + (currentWidth - newWidth);
+        newY = currentY + (currentHeight - newHeight);
+        break;
+      case 'e': // East - resize width only
+        newWidth = (currentWidth + deltaX).clamp(
+          20.0,
+          canvasSize.width - currentX,
+        );
+        break;
+      case 'w': // West - resize width (left) only
+        newWidth = (currentWidth - deltaX).clamp(20.0, currentX + currentWidth);
+        newX = currentX + (currentWidth - newWidth);
+        break;
+      case 'n': // North - resize height (top) only
+        newHeight = (currentHeight - deltaY).clamp(
+          20.0,
+          currentY + currentHeight,
+        );
+        newY = currentY + (currentHeight - newHeight);
+        break;
+      case 's': // South - resize height only
+        newHeight = (currentHeight + deltaY).clamp(
+          20.0,
+          canvasSize.height - currentY,
+        );
+        break;
+    }
+
+    controller.updateInteraction(
+      component.id,
+      position: Offset(newX, newY),
+      size: Size(newWidth, newHeight),
+    );
   }
 
   static void _handleResizeEnd(
@@ -502,6 +675,7 @@ class ComponentOverlayManager {
   ) {
     if (controller.isResizingComponent &&
         controller.resizingComponentId == componentId) {
+      controller.commitInteraction(componentId);
       controller.setResizeState(componentId, false);
     }
   }

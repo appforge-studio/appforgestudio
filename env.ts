@@ -6,7 +6,16 @@ import { fileURLToPath } from 'url';
 // The env.ts file is compiled to .output, so we need to go up to the root
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-config({ path: join(__dirname, '..', '..', '.env') });
+
+// Try loading from current directory (source mode) or from root relative to .output (build mode)
+const possiblePaths = [
+    join(__dirname, '.env'),
+    join(__dirname, '..', '..', '.env'),
+];
+
+for (const envPath of possiblePaths) {
+    config({ path: envPath });
+}
 
 // Export environment variables for use in other modules
 export const DATABASE_URL = process.env['DATABASE_URL'];
@@ -29,4 +38,5 @@ if (!DATABASE_URL) {
 export const env = {
     DATABASE_URL,
     JWT_SECRET,
+    GOOGLE_STUDIO_API_KEY,
 };

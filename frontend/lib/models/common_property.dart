@@ -30,12 +30,14 @@ class Enabled {
 abstract class Property {
   final String key;
   final String displayName;
+  final String group;
   final PropertyType type;
   final Enabled enable;
 
   const Property({
     required this.key,
     required this.displayName,
+    this.group = 'General',
     required this.type,
     this.enable = const Enabled(show: false, enabled: false),
   });
@@ -50,7 +52,7 @@ abstract class Property {
   dynamic get value;
 
   // Create a copy with new value
-  Property copyWith({dynamic value, Enabled? enable});
+  Property copyWith({dynamic value, Enabled? enable, String? group});
 }
 
 enum PropertyType {
@@ -74,6 +76,7 @@ class StringProperty extends Property {
   const StringProperty({
     required super.key,
     required super.displayName,
+    super.group,
     required String value,
     super.enable,
   }) : _value = value,
@@ -83,16 +86,23 @@ class StringProperty extends Property {
   String get value => _value;
 
   @override
-  dynamic toJson() => {'value': _value, 'enable': enable.toJson()};
+  @override
+  dynamic toJson() => {
+    'value': _value,
+    'enable': enable.toJson(),
+    'group': group,
+  };
 
   @override
   StringProperty fromJson(dynamic jsonValue) {
     String val = '';
     Enabled en = enable;
+    String grp = group;
 
     if (jsonValue is Map<String, dynamic> && jsonValue.containsKey('enable')) {
       val = jsonValue['value']?.toString() ?? '';
       en = Enabled.fromJson(jsonValue['enable']);
+      grp = jsonValue['group']?.toString() ?? group;
     } else {
       val = jsonValue?.toString() ?? '';
     }
@@ -100,16 +110,18 @@ class StringProperty extends Property {
     return StringProperty(
       key: key,
       displayName: displayName,
+      group: grp,
       value: val,
       enable: en,
     );
   }
 
   @override
-  StringProperty copyWith({dynamic value, Enabled? enable}) {
+  StringProperty copyWith({dynamic value, Enabled? enable, String? group}) {
     return StringProperty(
       key: key,
       displayName: displayName,
+      group: group ?? this.group,
       value: value?.toString() ?? _value,
       enable: enable ?? this.enable,
     );
@@ -125,6 +137,7 @@ class NumberProperty extends Property {
   const NumberProperty({
     required super.key,
     required super.displayName,
+    super.group,
     required double value,
     this.min,
     this.max,
@@ -136,21 +149,33 @@ class NumberProperty extends Property {
   double get value => _value;
 
   @override
-  dynamic toJson() => {'value': _value, 'enable': enable.toJson()};
+  @override
+  dynamic toJson() => {
+    'value': _value,
+    'enable': enable.toJson(),
+    'group': group,
+  };
 
   @override
   NumberProperty fromJson(dynamic jsonValue) {
     // Note: dynamic jsonValue can be double or Map
     double val = _value;
     Enabled en = enable;
+    String grp = group;
 
     if (jsonValue is Map<String, dynamic> && jsonValue.containsKey('enable')) {
-      val = (jsonValue['value'] is num)
-          ? jsonValue['value'].toDouble()
-          : _value;
+      final innerValue = jsonValue['value'];
+      if (innerValue is num) {
+        val = innerValue.toDouble();
+      } else if (innerValue is String) {
+        val = double.tryParse(innerValue) ?? _value;
+      }
       en = Enabled.fromJson(jsonValue['enable']);
+      grp = jsonValue['group']?.toString() ?? group;
     } else if (jsonValue is num) {
       val = jsonValue.toDouble();
+    } else if (jsonValue is String) {
+      val = double.tryParse(jsonValue) ?? _value;
     }
 
     if (min != null && val < min!) val = min!;
@@ -159,6 +184,7 @@ class NumberProperty extends Property {
     return NumberProperty(
       key: key,
       displayName: displayName,
+      group: grp,
       value: val,
       min: min,
       max: max,
@@ -167,7 +193,7 @@ class NumberProperty extends Property {
   }
 
   @override
-  NumberProperty copyWith({dynamic value, Enabled? enable}) {
+  NumberProperty copyWith({dynamic value, Enabled? enable, String? group}) {
     double val = (value is num) ? value.toDouble() : _value;
     if (min != null && val < min!) val = min!;
     if (max != null && val > max!) val = max!;
@@ -175,6 +201,7 @@ class NumberProperty extends Property {
     return NumberProperty(
       key: key,
       displayName: displayName,
+      group: group ?? this.group,
       value: val,
       min: min,
       max: max,
@@ -190,6 +217,7 @@ class ComponentColorProperty extends Property {
   const ComponentColorProperty({
     required super.key,
     required super.displayName,
+    super.group,
     required XDColor value,
     super.enable,
   }) : _value = value,
@@ -206,17 +234,20 @@ class ComponentColorProperty extends Property {
     'begin': _value.begin,
     'end': _value.end,
     'enable': enable.toJson(),
+    'group': group,
   };
 
   @override
   ComponentColorProperty fromJson(dynamic jsonValue) {
     XDColor val = _value;
     Enabled en = enable;
+    String grp = group;
 
     if (jsonValue is Map<String, dynamic>) {
       if (jsonValue.containsKey('enable')) {
         en = Enabled.fromJson(jsonValue['enable']);
       }
+      grp = jsonValue['group']?.toString() ?? group;
 
       List<String> colorValues = _value.value;
       ColorType type = _value.type;
@@ -224,10 +255,12 @@ class ComponentColorProperty extends Property {
       Alignment begin = _value.begin;
       Alignment end = _value.end;
 
-      if (jsonValue['value'] is List) {
-        colorValues = (jsonValue['value'] as List)
-            .map((e) => e.toString())
-            .toList();
+      final innerValue = jsonValue['value'];
+      if (innerValue is List) {
+        colorValues = innerValue.map((e) => e.toString()).toList();
+      } else if (innerValue is String) {
+        colorValues = [innerValue];
+        type = ColorType.solid;
       }
 
       if (jsonValue['type'] is int) {
@@ -250,21 +283,36 @@ class ComponentColorProperty extends Property {
         begin: begin,
         end: end,
       );
+    } else if (jsonValue is String) {
+      // Handle hex string (e.g., "#FF0000" or "#AARRGGBB")
+      val = XDColor(
+        [jsonValue],
+        type: ColorType.solid,
+        stops: [],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
     }
 
     return ComponentColorProperty(
       key: key,
       displayName: displayName,
+      group: grp,
       value: val,
       enable: en,
     );
   }
 
   @override
-  ComponentColorProperty copyWith({dynamic value, Enabled? enable}) {
+  ComponentColorProperty copyWith({
+    dynamic value,
+    Enabled? enable,
+    String? group,
+  }) {
     return ComponentColorProperty(
       key: key,
       displayName: displayName,
+      group: group ?? this.group,
       value: value is XDColor ? value : _value,
       enable: enable ?? this.enable,
     );
@@ -278,6 +326,7 @@ class BooleanProperty extends Property {
   const BooleanProperty({
     required super.key,
     required super.displayName,
+    super.group,
     required bool value,
     super.enable,
   }) : _value = value,
@@ -287,16 +336,22 @@ class BooleanProperty extends Property {
   bool get value => _value;
 
   @override
-  dynamic toJson() => {'value': _value, 'enable': enable.toJson()};
+  dynamic toJson() => {
+    'value': _value,
+    'enable': enable.toJson(),
+    'group': group,
+  };
 
   @override
   BooleanProperty fromJson(dynamic jsonValue) {
     bool val = _value;
     Enabled en = enable;
+    String grp = group;
 
     if (jsonValue is Map<String, dynamic> && jsonValue.containsKey('enable')) {
       val = jsonValue['value'] as bool? ?? _value;
       en = Enabled.fromJson(jsonValue['enable']);
+      grp = jsonValue['group']?.toString() ?? group;
     } else if (jsonValue is bool) {
       val = jsonValue;
     }
@@ -304,16 +359,18 @@ class BooleanProperty extends Property {
     return BooleanProperty(
       key: key,
       displayName: displayName,
+      group: grp,
       value: val,
       enable: en,
     );
   }
 
   @override
-  BooleanProperty copyWith({dynamic value, Enabled? enable}) {
+  BooleanProperty copyWith({dynamic value, Enabled? enable, String? group}) {
     return BooleanProperty(
       key: key,
       displayName: displayName,
+      group: group ?? this.group,
       value: value is bool ? value : _value,
       enable: enable ?? this.enable,
     );
@@ -329,6 +386,7 @@ class DropdownProperty<T> extends Property {
   const DropdownProperty({
     required super.key,
     required super.displayName,
+    super.group,
     required T value,
     required this.options,
     required this.displayText,
@@ -347,18 +405,20 @@ class DropdownProperty<T> extends Property {
     } else {
       val = _value.toString();
     }
-    return {'value': val, 'enable': enable.toJson()};
+    return {'value': val, 'enable': enable.toJson(), 'group': group};
   }
 
   @override
   DropdownProperty<T> fromJson(dynamic jsonValue) {
     T newValue = _value;
     Enabled en = enable;
+    String grp = group;
     dynamic innerValue = jsonValue;
 
     if (jsonValue is Map<String, dynamic> && jsonValue.containsKey('enable')) {
       innerValue = jsonValue['value'];
       en = Enabled.fromJson(jsonValue['enable']);
+      grp = jsonValue['group']?.toString() ?? group;
     }
 
     if (_value is Enum && innerValue is int) {
@@ -379,6 +439,7 @@ class DropdownProperty<T> extends Property {
     return DropdownProperty<T>(
       key: key,
       displayName: displayName,
+      group: grp,
       value: newValue,
       options: options,
       displayText: displayText,
@@ -387,10 +448,15 @@ class DropdownProperty<T> extends Property {
   }
 
   @override
-  DropdownProperty<T> copyWith({dynamic value, Enabled? enable}) {
+  DropdownProperty<T> copyWith({
+    dynamic value,
+    Enabled? enable,
+    String? group,
+  }) {
     return DropdownProperty<T>(
       key: key,
       displayName: displayName,
+      group: group ?? this.group,
       value: value is T ? value : _value,
       options: options,
       displayText: displayText,
@@ -406,6 +472,7 @@ class SideProperty extends Property {
   const SideProperty({
     required super.key,
     required super.displayName,
+    super.group,
     required XDSide value,
     super.enable,
   }) : _value = value,
@@ -419,17 +486,20 @@ class SideProperty extends Property {
     'values': _value.values,
     'type': _value.type.index,
     'enable': enable.toJson(),
+    'group': group,
   };
 
   @override
   SideProperty fromJson(dynamic jsonValue) {
     XDSide val = _value;
     Enabled en = enable;
+    String grp = group;
 
     if (jsonValue is Map<String, dynamic>) {
       if (jsonValue.containsKey('enable')) {
         en = Enabled.fromJson(jsonValue['enable']);
       }
+      grp = jsonValue['group']?.toString() ?? group;
 
       List<double> values = _value.values;
       SideType type = _value.type;
@@ -453,16 +523,18 @@ class SideProperty extends Property {
     return SideProperty(
       key: key,
       displayName: displayName,
+      group: grp,
       value: val,
       enable: en,
     );
   }
 
   @override
-  SideProperty copyWith({dynamic value, Enabled? enable}) {
+  SideProperty copyWith({dynamic value, Enabled? enable, String? group}) {
     return SideProperty(
       key: key,
       displayName: displayName,
+      group: group ?? this.group,
       value: value is XDSide ? value : _value,
       enable: enable ?? this.enable,
     );
@@ -476,6 +548,7 @@ class CornerProperty extends Property {
   const CornerProperty({
     required super.key,
     required super.displayName,
+    super.group,
     required XDCorner value,
     super.enable,
   }) : _value = value,
@@ -489,17 +562,20 @@ class CornerProperty extends Property {
     'values': _value.values,
     'type': _value.type.index,
     'enable': enable.toJson(),
+    'group': group,
   };
 
   @override
   CornerProperty fromJson(dynamic jsonValue) {
     XDCorner val = _value;
     Enabled en = enable;
+    String grp = group;
 
     if (jsonValue is Map<String, dynamic>) {
       if (jsonValue.containsKey('enable')) {
         en = Enabled.fromJson(jsonValue['enable']);
       }
+      grp = jsonValue['group']?.toString() ?? group;
 
       List<double> values = _value.values;
       CornerType type = _value.type;
@@ -523,16 +599,18 @@ class CornerProperty extends Property {
     return CornerProperty(
       key: key,
       displayName: displayName,
+      group: grp,
       value: val,
       enable: en,
     );
   }
 
   @override
-  CornerProperty copyWith({dynamic value, Enabled? enable}) {
+  CornerProperty copyWith({dynamic value, Enabled? enable, String? group}) {
     return CornerProperty(
       key: key,
       displayName: displayName,
+      group: group ?? this.group,
       value: value is XDCorner ? value : _value,
       enable: enable ?? this.enable,
     );
@@ -546,6 +624,7 @@ class IconProperty extends Property {
   const IconProperty({
     required super.key,
     required super.displayName,
+    super.group,
     required String value,
     super.enable,
   }) : _value = value,
@@ -555,16 +634,22 @@ class IconProperty extends Property {
   String get value => _value;
 
   @override
-  dynamic toJson() => {'value': _value, 'enable': enable.toJson()};
+  dynamic toJson() => {
+    'value': _value,
+    'enable': enable.toJson(),
+    'group': group,
+  };
 
   @override
   IconProperty fromJson(dynamic jsonValue) {
     String val = _value;
     Enabled en = enable;
+    String grp = group;
 
     if (jsonValue is Map<String, dynamic> && jsonValue.containsKey('enable')) {
       val = jsonValue['value']?.toString() ?? _value;
       en = Enabled.fromJson(jsonValue['enable']);
+      grp = jsonValue['group']?.toString() ?? group;
     } else if (jsonValue is String) {
       val = jsonValue;
     }
@@ -572,16 +657,18 @@ class IconProperty extends Property {
     return IconProperty(
       key: key,
       displayName: displayName,
+      group: grp,
       value: val,
       enable: en,
     );
   }
 
   @override
-  IconProperty copyWith({dynamic value, Enabled? enable}) {
+  IconProperty copyWith({dynamic value, Enabled? enable, String? group}) {
     return IconProperty(
       key: key,
       displayName: displayName,
+      group: group ?? this.group,
       value: value?.toString() ?? _value,
       enable: enable ?? this.enable,
     );

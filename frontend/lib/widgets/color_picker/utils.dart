@@ -2,7 +2,6 @@
 
 import 'dart:math';
 import 'package:flutter/painting.dart';
-import 'colors.dart';
 
 /// Check if is good condition to use white foreground color by passing
 /// the background color, and optional bias.
@@ -17,10 +16,11 @@ bool useWhiteForeground(Color backgroundColor, {double bias = 0.0}) {
   // return 1.05 / (color.computeLuminance() + 0.05) > 4.5;
 
   // New:
-  int v = sqrt(pow(backgroundColor.red, 2) * 0.299 +
-          pow(backgroundColor.green, 2) * 0.587 +
-          pow(backgroundColor.blue, 2) * 0.114)
-      .round();
+  int v = sqrt(
+    pow(backgroundColor.red, 2) * 0.299 +
+        pow(backgroundColor.green, 2) * 0.587 +
+        pow(backgroundColor.blue, 2) * 0.114,
+  ).round();
   return v < 130 + bias ? true : false;
 }
 
@@ -55,7 +55,10 @@ HSVColor hslToHsv(HSLColor color) {
   double s = 0.0;
   double v = 0.0;
 
-  v = color.lightness + color.saturation * (color.lightness < 0.5 ? color.lightness : 1 - color.lightness);
+  v =
+      color.lightness +
+      color.saturation *
+          (color.lightness < 0.5 ? color.lightness : 1 - color.lightness);
   if (v != 0) s = 2 - 2 * color.lightness / v;
 
   return HSVColor.fromAHSV(
@@ -92,7 +95,8 @@ const String kValidHexPattern = r'^#?[0-9a-fA-F]{1,8}';
 /// if (hexCompleteValidator.hasMatch(hex)) print('$hex is valid HEX color');
 /// ```
 /// Reference: https://en.wikipedia.org/wiki/Web_colors#Hex_triplet
-const String kCompleteValidHexPattern = r'^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$';
+const String kCompleteValidHexPattern =
+    r'^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$';
 
 /// Try to convert text input or any [String] to valid [Color].
 /// The [String] must be provided in one of those formats:
@@ -188,7 +192,8 @@ String colorToHex(
   bool enableAlpha = true,
   bool toUpperCase = true,
 }) {
-  final String hex = (includeHashSign ? '#' : '') +
+  final String hex =
+      (includeHashSign ? '#' : '') +
       (enableAlpha ? _padRadix(color.alpha) : '') +
       _padRadix(color.red) +
       _padRadix(color.green) +
@@ -202,8 +207,6 @@ String _padRadix(int value) => value.toRadixString(16).padLeft(2, '0');
 // Extension for String
 extension ColorExtension1 on String {
   Color? toColor() {
-    Color? color = colorFromName(this);
-    if (color != null) return color;
     return colorFromHex(this);
   }
 }

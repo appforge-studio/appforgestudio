@@ -122,13 +122,13 @@ async function setupDatabase() {
         code: getComponentCode('icon'),
         properties: [
           {
-            name: 'icon', type: 'icon', initialValue: (() => {
+            name: 'icon', displayName: 'Icon', type: 'icon', group: 'Icon', initialValue: (() => {
               try { return fs.readFileSync(path.join(__dirname, 'svgs', 'solid', 'house.svg'), 'utf8'); }
               catch { return ""; }
             })()
           },
-          { name: 'color', type: 'color', initialValue: '#000000' },
-          { name: 'size', type: 'number', initialValue: 24.0 },
+          { name: 'color', displayName: 'Color', type: 'color', group: 'Appearance', initialValue: '#000000' },
+          { name: 'size', displayName: 'Size', type: 'number', group: 'Layout', initialValue: 24.0 },
         ]
       },
       {
@@ -139,11 +139,20 @@ async function setupDatabase() {
         isResizable: true,
         code: getComponentCode('container'),
         properties: [
-          { name: 'width', type: 'number', initialValue: 100.0 },
-          { name: 'height', type: 'number', initialValue: 100.0 },
-          { name: 'backgroundColor', type: 'color', initialValue: '#FFFFFF' },
-          { name: 'borderRadius', type: 'number', initialValue: 0.0 },
-          { name: 'padding', type: 'number', initialValue: 0.0 }
+          { name: 'width', displayName: 'Width', type: 'number', group: 'Layout', initialValue: 100.0 },
+          { name: 'height', displayName: 'Height', type: 'number', group: 'Layout', initialValue: 100.0 },
+          { name: 'backgroundColor', displayName: 'Color', type: 'color', group: 'Appearance', initialValue: '#FFFFFF' },
+          { name: 'borderColor', displayName: 'Border Color', type: 'color', group: 'Appearance', initialValue: '#000000' },
+          { name: 'borderWidth', displayName: 'Border Width', type: 'number', group: 'Appearance', initialValue: 1.0 },
+          { name: 'borderRadius', displayName: 'Radius', type: 'number', group: 'Appearance', initialValue: 0.0 },
+
+          { name: 'shadow', displayName: 'Shadow', type: 'boolean', group: 'Appearance', initialValue: false },
+          { name: 'shadowColor', displayName: 'Shadow Color', type: 'color', group: 'Appearance', initialValue: '#33000000' },
+          { name: 'shadowBlur', displayName: 'Blur', type: 'number', group: 'Appearance', initialValue: 8.0 },
+          { name: 'shadowSpread', displayName: 'Spread', type: 'number', group: 'Appearance', initialValue: 0.0 },
+          { name: 'shadowX', displayName: 'X', type: 'number', group: 'Appearance', initialValue: 0.0 },
+          { name: 'shadowY', displayName: 'Y', type: 'number', group: 'Appearance', initialValue: 4.0 },
+          { name: 'backgroundBlur', displayName: 'Background Blur', type: 'number', group: 'Appearance', initialValue: 0.0 }
         ]
       },
       {
@@ -154,10 +163,10 @@ async function setupDatabase() {
         isResizable: false,
         code: getComponentCode('text'),
         properties: [
-          { name: 'content', type: 'string', initialValue: 'Sample Text' },
-          { name: 'fontSize', type: 'number', initialValue: 16.0 },
-          { name: 'color', type: 'color', initialValue: '#000000' },
-          { name: 'fontFamily', type: 'string', initialValue: 'Roboto' }
+          { name: 'content', displayName: 'Content', type: 'string', group: 'Text', initialValue: 'Sample Text' },
+          { name: 'fontSize', displayName: 'Font Size', type: 'number', group: 'Text', initialValue: 16.0 },
+          { name: 'color', displayName: 'Color', type: 'color', group: 'Text', initialValue: '#000000' },
+          { name: 'fontFamily', displayName: 'Font Family', type: 'string', group: 'Text', initialValue: 'Roboto' }
         ]
       },
       {
@@ -168,10 +177,10 @@ async function setupDatabase() {
         isResizable: true,
         code: getComponentCode('image'),
         properties: [
-          { name: 'source', type: 'string', initialValue: 'https://via.placeholder.com/150' },
-          { name: 'width', type: 'number', initialValue: 150.0 },
-          { name: 'height', type: 'number', initialValue: 150.0 },
-          { name: 'borderRadius', type: 'number', initialValue: 0.0 }
+          { name: 'source', displayName: 'Source', type: 'string', group: 'Image', initialValue: 'https://via.placeholder.com/150' },
+          { name: 'width', displayName: 'Width', type: 'number', group: 'Layout', initialValue: 150.0 },
+          { name: 'height', displayName: 'Height', type: 'number', group: 'Layout', initialValue: 150.0 },
+          { name: 'borderRadius', displayName: 'Radius', type: 'number', group: 'Appearance', initialValue: 0.0 }
         ]
       }
     ];

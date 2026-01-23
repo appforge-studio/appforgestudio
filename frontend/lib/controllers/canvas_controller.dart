@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:uuid/uuid.dart';
 import '../models/component_model.dart';
 import '../models/state_classes.dart';
 import '../utilities/interfaces.dart';
@@ -25,8 +26,23 @@ class CanvasController extends GetxController
       ''.obs; // 'se', 'sw', 'ne', 'nw', 'e', 'w', 'n', 's'
   final Rx<Size?> _originalSize = Rx<Size?>(null);
 
+  // Box Selection State
+  final Rx<Rect?> _boxSelectionRect = Rx<Rect?>(null);
+  final RxBool _isBoxSelecting = false.obs;
+  // Temporary storage for selection start point
+  Offset? _boxSelectionStart;
+
+  // Transient interaction state (for performance)
+  // Maps component ID to current interaction delta/state
+  final RxMap<String, ComponentInteractionState> _interactionUpdates =
+      <String, ComponentInteractionState>{}.obs;
+
   // Cursor state tracking
   final Rx<SystemMouseCursor> _currentCursor = SystemMouseCursors.basic.obs;
+
+  // AI Session state
+  final RxString _currentSessionId = ''.obs;
+  String get currentSessionId => _currentSessionId.value;
 
   // Expose state for other controllers to listen to
   Rx<CanvasState> get stateStream => _state;
@@ -39,6 +55,10 @@ class CanvasController extends GetxController
   bool get isDragging => _state.value.isDragging;
   bool get isPropertyEditorVisible => _state.value.isPropertyEditorVisible;
 
+  // Interaction getters
+  ComponentInteractionState? getInteractionState(String componentId) =>
+      _interactionUpdates[componentId];
+
   // Component repositioning getters
   bool get isDraggingComponent => _isDraggingComponent.value;
   String get draggingComponentId => _draggingComponentId.value;
@@ -47,6 +67,16 @@ class CanvasController extends GetxController
   bool get isResizingComponent => _isResizingComponent.value;
   String get resizingComponentId => _resizingComponentId.value;
   String get resizeHandle => _resizeHandle.value;
+
+  // Helper to check if any component interaction is active
+  bool get isInteractingWithComponent =>
+      isDraggingComponent || isResizingComponent;
+
+  // Box Selection getters
+  Rect? get boxSelectionRect => _boxSelectionRect.value;
+  bool get isBoxSelecting => _isBoxSelecting.value;
+  // Multi-selection getter
+  Set<String> get selectedComponentIds => _state.value.selectedComponentIds;
 
   // Cursor getter
   SystemMouseCursor get currentCursor => _currentCursor.value;
@@ -78,7 +108,30 @@ class CanvasController extends GetxController
       _state.value.copyWith(
         components: updatedComponents,
         selectedComponent: newSelectedComponent,
+        selectedComponentIds: _state.value.selectedComponentIds
+            .where((id) => id != componentId)
+            .toSet(),
         isPropertyEditorVisible: newSelectedComponent != null,
+      ),
+    );
+  }
+
+  void deleteSelectedComponents() {
+    if (_state.value.selectedComponentIds.isEmpty) return;
+
+    final updatedComponents = _state.value.components
+        .where(
+          (component) =>
+              !_state.value.selectedComponentIds.contains(component.id),
+        )
+        .toList();
+
+    _updateState(
+      _state.value.copyWith(
+        components: updatedComponents,
+        selectedComponent: null,
+        selectedComponentIds: {},
+        isPropertyEditorVisible: false,
       ),
     );
   }
@@ -95,12 +148,6 @@ class CanvasController extends GetxController
             )
             .firstOrNull ??
         true;
-
-    if (positionChanged) {
-      debugPrint(
-        '🔄 CONTROLLER: updateComponent(${updatedComponent.id}) → (${updatedComponent.x.toInt()}, ${updatedComponent.y.toInt()})',
-      );
-    }
 
     final updatedComponents = _state.value.components
         .map(
@@ -177,25 +224,14 @@ class CanvasController extends GetxController
 
   // Simplified drag state management - used by json_dynamic_widget functions
   void setDragState(String componentId, bool isDragging) {
-    debugPrint('🎮 CONTROLLER: setDragState($componentId, $isDragging)');
-    debugPrint(
-      '   Before: isDragging=${_isDraggingComponent.value}, draggingId=${_draggingComponentId.value}',
-    );
-
     _isDraggingComponent.value = isDragging;
     _draggingComponentId.value = isDragging ? componentId : '';
     if (!isDragging) {
       _dragStartPosition.value = null;
       _currentCursor.value = SystemMouseCursors.basic;
-      debugPrint('   Drag ended - cursor reset to basic');
     } else {
       _currentCursor.value = SystemMouseCursors.grabbing;
-      debugPrint('   Drag started - cursor set to grabbing');
     }
-
-    debugPrint(
-      '   After: isDragging=${_isDraggingComponent.value}, draggingId=${_draggingComponentId.value}',
-    );
   }
 
   // Resize state management
@@ -204,13 +240,6 @@ class CanvasController extends GetxController
     bool isResizing, {
     String handle = '',
   }) {
-    debugPrint(
-      '🎮 CONTROLLER: setResizeState($componentId, $isResizing, handle: $handle)',
-    );
-    debugPrint(
-      '   Before: isResizing=${_isResizingComponent.value}, resizingId=${_resizingComponentId.value}',
-    );
-
     _isResizingComponent.value = isResizing;
     _resizingComponentId.value = isResizing ? componentId : '';
     _resizeHandle.value = handle;
@@ -219,22 +248,13 @@ class CanvasController extends GetxController
       final component = getComponentById(componentId);
       if (component != null) {
         _originalSize.value = ComponentDimensions.getSize(component);
-        debugPrint(
-          '   Original size stored: ${_originalSize.value!.width.toInt()}x${_originalSize.value!.height.toInt()}',
-        );
       }
       // Update cursor for resize operation
       _updateCursorForResize(handle);
-      debugPrint('   Resize started - cursor set for handle: $handle');
     } else {
       _originalSize.value = null;
       _currentCursor.value = SystemMouseCursors.basic;
-      debugPrint('   Resize ended - cursor reset to basic');
     }
-
-    debugPrint(
-      '   After: isResizing=${_isResizingComponent.value}, resizingId=${_resizingComponentId.value}',
-    );
   }
 
   // Update cursor based on resize handle
@@ -346,12 +366,6 @@ class CanvasController extends GetxController
     final sizeChanged =
         (newWidth - currentWidth).abs() > 2 ||
         (newHeight - currentHeight).abs() > 2;
-    if (sizeChanged) {
-      debugPrint('🔧 RESIZE: $componentId, handle: $handle');
-      debugPrint(
-        '   ${currentWidth.toInt()}x${currentHeight.toInt()} → ${newWidth.toInt()}x${newHeight.toInt()}',
-      );
-    }
 
     // Update component properties with new dimensions
     // We must ensure the property is enabled since we are setting an explicit size
@@ -379,9 +393,6 @@ class CanvasController extends GetxController
     );
 
     updateComponent(updatedComponent);
-    if (sizeChanged) {
-      debugPrint('   ✅ Resize applied');
-    }
   }
 
   ComponentModel? getComponentById(String id) {
@@ -393,7 +404,12 @@ class CanvasController extends GetxController
     _updateState(_state.value.copyWith(canvasSize: size));
   }
 
+  void startNewSession() {
+    _currentSessionId.value = const Uuid().v4();
+  }
+
   void clearCanvas() {
+    _currentSessionId.value = '';
     _updateState(
       _state.value.copyWith(
         components: [],
@@ -406,34 +422,13 @@ class CanvasController extends GetxController
   // Selection management
   @override
   void onComponentSelected(ComponentModel component) {
-    debugPrint(
-      '🎮 CanvasController: onComponentSelected called with ${component.id}',
-    );
-    _updateState(
-      _state.value.copyWith(
-        selectedComponent: component,
-        isPropertyEditorVisible: true,
-      ),
-    );
-    debugPrint(
-      '🎮 CanvasController: State updated - selectedComponent: ${_state.value.selectedComponent?.id}, isPropertyEditorVisible: ${_state.value.isPropertyEditorVisible}',
-    );
+    // Single selection click (replace existing selection)
+    _selectMultipleComponents({component.id});
   }
 
   @override
   void onComponentDeselected() {
-    print(
-      '🔄 Deselecting component - current selected: ${_state.value.selectedComponent?.id}',
-    );
-    _updateState(
-      _state.value.copyWith(
-        selectedComponent: null,
-        isPropertyEditorVisible: false,
-      ),
-    );
-    print(
-      '🔄 After deselection - selected: ${_state.value.selectedComponent?.id}',
-    );
+    clearSelection();
   }
 
   @override
@@ -465,6 +460,169 @@ class CanvasController extends GetxController
     // If component is null, it means drag was cancelled or not accepted
   }
 
+  // Transient Interaction Methods (Performance)
+
+  void startInteraction(String componentId) {
+    if (!_interactionUpdates.containsKey(componentId)) {
+      _interactionUpdates[componentId] = ComponentInteractionState.empty();
+    }
+  }
+
+  void updateInteraction(String componentId, {Offset? position, Size? size}) {
+    final current =
+        _interactionUpdates[componentId] ?? ComponentInteractionState.empty();
+
+    _interactionUpdates[componentId] = current.copyWith(
+      position: position,
+      size: size,
+    );
+  }
+
+  void clearInteraction(String componentId) {
+    _interactionUpdates.remove(componentId);
+  }
+
+  void commitInteraction(String componentId) {
+    final interaction = _interactionUpdates[componentId];
+    if (interaction == null) return;
+
+    final component = getComponentById(componentId);
+    if (component == null) {
+      clearInteraction(componentId);
+      return;
+    }
+
+    var updatedComponent = component;
+
+    if (interaction.position != null) {
+      updatedComponent = updatedComponent.copyWith(
+        x: interaction.position!.dx,
+        y: interaction.position!.dy,
+      );
+    }
+
+    if (interaction.size != null) {
+      // Update properties if size changed
+      var updatedProperties = updatedComponent.properties
+          .updateProperty('width', interaction.size!.width)
+          .updateProperty('height', interaction.size!.height);
+
+      if (updatedComponent.properties.getProperty('width') == null) {
+        updatedProperties = updatedProperties.updatePropertyEnabled(
+          'width',
+          true,
+        );
+      }
+      if (updatedComponent.properties.getProperty('height') == null) {
+        updatedProperties = updatedProperties.updatePropertyEnabled(
+          'height',
+          true,
+        );
+      }
+
+      updatedComponent = updatedComponent.copyWith(
+        properties: updatedProperties,
+      );
+    }
+
+    // Commit to main state
+    updateComponent(updatedComponent);
+    clearInteraction(componentId);
+  }
+
+  // Box Selection Logic
+
+  void startBoxSelection(Offset startPos) {
+    _isBoxSelecting.value = true;
+    _boxSelectionStart = startPos;
+    _boxSelectionRect.value = Rect.fromPoints(startPos, startPos);
+
+    // Clear existing selection unless shift is held (TODO: add shift support)
+    // For now, simple behavior: start fresh
+    clearSelection();
+  }
+
+  void updateBoxSelection(Offset currentPos) {
+    if (!_isBoxSelecting.value || _boxSelectionStart == null) return;
+    _boxSelectionRect.value = Rect.fromPoints(_boxSelectionStart!, currentPos);
+
+    // Live selection update - select components as the box moves
+    _updateSelectionFromRect(_boxSelectionRect.value!);
+  }
+
+  void endBoxSelection() {
+    if (!_isBoxSelecting.value || _boxSelectionRect.value == null) return;
+
+    // Final selection update
+    _updateSelectionFromRect(_boxSelectionRect.value!);
+
+    _isBoxSelecting.value = false;
+    _boxSelectionRect.value = null;
+    _boxSelectionStart = null;
+  }
+
+  /// Helper method to update selection based on selection rectangle
+  void _updateSelectionFromRect(Rect selectionRect) {
+    final selectedIds = <String>{};
+
+    for (final component in components) {
+      final width =
+          component.detectedSize?.width ??
+          ComponentDimensions.getWidth(component) ??
+          100.0;
+      final height =
+          component.detectedSize?.height ??
+          ComponentDimensions.getHeight(component) ??
+          100.0;
+
+      // Check if component intersects with selection box
+      // (Using simple bounding box intersection)
+      final componentRect = Rect.fromLTWH(
+        component.x,
+        component.y,
+        width,
+        height,
+      );
+
+      if (selectionRect.overlaps(componentRect)) {
+        selectedIds.add(component.id);
+      }
+    }
+
+    // Update selection live (even if empty, to deselect components that are no longer in the box)
+    _selectMultipleComponents(selectedIds);
+  }
+
+  void _selectMultipleComponents(Set<String> ids) {
+    ComponentModel? primarySelection;
+    if (ids.isNotEmpty) {
+      // Set the last one as primary for property editor
+      primarySelection = components.firstWhereOrNull((c) => c.id == ids.last);
+    }
+
+    _updateState(
+      _state.value.copyWith(
+        selectedComponentIds: ids,
+        selectedComponent: primarySelection, // Maintain backward compatibility
+        isPropertyEditorVisible: ids.isNotEmpty,
+      ),
+    );
+  }
+
+  void clearSelection() {
+    _updateState(
+      _state.value.copyWith(
+        selectedComponentIds: {},
+        selectedComponent:
+            null, // This sets it to _Undefined check manually if needed or utilize nullable logic in copyWith
+        isPropertyEditorVisible: false,
+      ),
+    );
+    // Ideally pass explicit null to reset selectedComponent via copyWith logic in state_classes
+    // But copyWith handles _Undefined. We need to actually pass null.
+    // The previous implementation of clearCanvas did: selectedComponent: null.
+  }
+
   // Utility methods
 
   void _updateState(CanvasState newState) {
@@ -476,9 +634,16 @@ class CanvasController extends GetxController
     return _state.value.toJson();
   }
 
-  void fromJson(Map<String, dynamic> json) {
+  void fromJson(Map<String, dynamic> json, {String? sessionId}) {
+    if (sessionId != null) {
+      _currentSessionId.value = sessionId;
+    }
     final componentsJson = json['components'] as List<dynamic>?;
     final components = <ComponentModel>[];
+
+    debugPrint(
+      '📥 CanvasController: Loading design from JSON. Components found: ${componentsJson?.length}',
+    );
 
     if (componentsJson != null) {
       for (final componentJson in componentsJson) {
@@ -487,9 +652,12 @@ class CanvasController extends GetxController
             componentJson as Map<String, dynamic>,
           );
           components.add(component);
+          debugPrint(
+            '✅ Parsed component: ${component.id} (${component.type.name})',
+          );
         } catch (e) {
           // Skip invalid components
-          print('Error parsing component: $e');
+          debugPrint('❌ Error parsing component: $e\nJSON: $componentJson');
         }
       }
     }

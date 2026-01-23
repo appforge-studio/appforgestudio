@@ -11,7 +11,7 @@ class ComponentPropertiesFactory {
   // Get default properties for a component type
   static ComponentProperties getDefaultProperties(ComponentType type) {
     switch (type) {
-      case ComponentType.container:
+            case ComponentType.container:
         return ContainerProperties.createDefault();
       case ComponentType.icon:
         return IconProperties.createDefault();
@@ -19,6 +19,19 @@ class ComponentPropertiesFactory {
         return ImageProperties.createDefault();
       case ComponentType.text:
         return TextProperties.createDefault();
+    }
+  }
+
+  static Map<String, String? Function(dynamic)> getValidators(ComponentType type) {
+    switch (type) {
+      case ComponentType.container:
+        return ContainerProperties.validators;
+      case ComponentType.icon:
+        return IconProperties.validators;
+      case ComponentType.image:
+        return ImageProperties.validators;
+      case ComponentType.text:
+        return TextProperties.validators;
     }
   }
 }

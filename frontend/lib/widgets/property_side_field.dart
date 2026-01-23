@@ -15,7 +15,10 @@ class PropertySideField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.labels,
+    this.showLabel = true,
   });
+
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +34,9 @@ class PropertySideField extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(label, style: TextStyle(color: Pallet.font1, fontSize: 13)),
-            const SizedBox(width: 10),
+            if (showLabel)
+              Text(label, style: TextStyle(color: Pallet.font1, fontSize: 13)),
+            if (showLabel) const SizedBox(width: 10),
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(5),
@@ -94,7 +98,6 @@ class PropertySideField extends StatelessWidget {
                 effectiveLabels[2],
                 2,
               ), // Index 2 is Bottom in XDSide? XDSide says [top, right, bottom, left].
-
               // If we assume UI was Top, Bottom, ...
               // Let's stick to indices: 0=Top, 1=Right, 2=Bottom, 3=Left.
               // So labels should be [T, R, B, L] to match indices?

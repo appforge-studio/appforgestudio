@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import '../../models/component_model.dart';
 import '../../models/component_properties.dart';
 import '../../models/types/color.dart';
@@ -35,11 +36,50 @@ class ContainerComponent extends ComponentModel {
         properties.getProperty<XDColor>('backgroundColor') ??
         XDColor(['#FFFFFF']);
 
-    // Convert color to hex string format
     String? colorHex;
+    Map<String, dynamic>? gradient;
+
     if (applyBg) {
-      colorHex =
-          '#${backgroundColor.toColor().toARGB32().toRadixString(16).padLeft(8, '0')}';
+      if (backgroundColor.type == ColorType.solid) {
+        colorHex =
+            '#${backgroundColor.toColor().toARGB32().toRadixString(16).padLeft(8, '0')}';
+      } else {
+        // Handle gradients
+        final colors = backgroundColor
+            .toColors()
+            .map(
+              (c) =>
+                  '#${c.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}',
+            )
+            .toList();
+
+        gradient = {
+          'type': backgroundColor.type.name, // 'linear' or 'radial'
+          'colors': colors,
+          'stops': backgroundColor.stops,
+          'begin': _alignmentToString(backgroundColor.begin),
+          'end': _alignmentToString(backgroundColor.end),
+        };
+
+        if (backgroundColor.type == ColorType.linear) {
+          gradient['tileMode'] = 'clamp';
+        } else if (backgroundColor.type == ColorType.radial) {
+          // Radial specific defaults if needed, usually center is alignment
+          gradient['center'] = 'center';
+          gradient['radius'] = 0.5;
+        }
+      }
+    }
+
+    final applyBorder = properties.shouldApplyProperty('borderColor');
+    final borderColor =
+        properties.getProperty<XDColor>('borderColor') ?? XDColor(['#000000']);
+    final borderWidth = properties.getProperty<double>('borderWidth') ?? 1.0;
+
+    String? borderColorHex;
+    if (applyBorder) {
+      borderColorHex =
+          '#${borderColor.toColor().toARGB32().toRadixString(16).padLeft(8, '0')}';
     }
 
     final borderRadius = properties.shouldApplyProperty('borderRadius')
@@ -51,19 +91,76 @@ class ContainerComponent extends ComponentModel {
         ? (properties.getProperty<XDSide>('padding') ?? XDSide.all(8.0))
         : null;
 
+    final hasShadow = properties.shouldApplyProperty('shadow')
+        ? (properties.getProperty<bool>('shadow') ?? false)
+        : false;
+
+    // Shadow properties
+    final shadowColor =
+        properties.getProperty<XDColor>('shadowColor') ??
+        XDColor(['#33000000']);
+    final shadowBlur = properties.getProperty<double>('shadowBlur') ?? 8.0;
+    final shadowSpread = properties.getProperty<double>('shadowSpread') ?? 0.0;
+    final shadowX = properties.getProperty<double>('shadowX') ?? 0.0;
+    final shadowY = properties.getProperty<double>('shadowY') ?? 4.0;
+
+    String shadowColorHex =
+        '#${shadowColor.toColor().toARGB32().toRadixString(16).padLeft(8, '0')}';
+
+    final backgroundBlur = properties.shouldApplyProperty('backgroundBlur')
+        ? (properties.getProperty<double>('backgroundBlur') ?? 0.0)
+        : 0.0;
+
     // Pure visual component - no interactions (handled by overlay layer)
-    return {
+    final containerJson = {
       'type': 'container',
       'args': {
         if (width != null) 'width': width,
         if (height != null) 'height': height,
         'decoration': {
           if (colorHex != null) 'color': colorHex.toUpperCase(),
+          if (gradient != null) 'gradient': gradient,
           'borderRadius': {'radius': borderRadius, 'type': 'circular'},
+          if (applyBorder)
+            'border': {
+              'color': borderColorHex!.toUpperCase(),
+              'width': borderWidth,
+            },
+          if (hasShadow)
+            'boxShadow': [
+              {
+                'color': shadowColorHex.toUpperCase(),
+                'blurRadius': shadowBlur,
+                'spreadRadius': shadowSpread,
+                'offset': {'dx': shadowX, 'dy': shadowY},
+              },
+            ],
         },
         if (padding != null) 'padding': padding.left,
       },
     };
+
+    if (backgroundBlur > 0) {
+      return {
+        'type': 'clip_rrect',
+        'args': {
+          'borderRadius': {'radius': borderRadius, 'type': 'circular'},
+          'child': {
+            'type': 'backdrop_filter',
+            'args': {
+              'filter': {
+                'type': 'blur',
+                'sigmaX': backgroundBlur,
+                'sigmaY': backgroundBlur,
+              },
+              'child': containerJson,
+            },
+          },
+        },
+      };
+    }
+
+    return containerJson;
   }
 
   @override
@@ -105,5 +202,17 @@ class ContainerComponent extends ComponentModel {
       properties: properties,
       resizable: json['resizable'] as bool? ?? true,
     );
+  }
+  String _alignmentToString(Alignment alignment) {
+    if (alignment == Alignment.topLeft) return 'topLeft';
+    if (alignment == Alignment.topCenter) return 'topCenter';
+    if (alignment == Alignment.topRight) return 'topRight';
+    if (alignment == Alignment.centerLeft) return 'centerLeft';
+    if (alignment == Alignment.center) return 'center';
+    if (alignment == Alignment.centerRight) return 'centerRight';
+    if (alignment == Alignment.bottomLeft) return 'bottomLeft';
+    if (alignment == Alignment.bottomCenter) return 'bottomCenter';
+    if (alignment == Alignment.bottomRight) return 'bottomRight';
+    return 'center';
   }
 }

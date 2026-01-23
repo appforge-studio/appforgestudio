@@ -14,7 +14,12 @@ class PropertyTextField extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.keyboardType = TextInputType.text,
+    this.showLabel = true,
+    this.width,
   });
+
+  final bool showLabel;
+  final double? width;
 
   @override
   State<PropertyTextField> createState() => _PropertyTextFieldState();
@@ -58,51 +63,53 @@ class _PropertyTextFieldState extends State<PropertyTextField> {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          width: 80, // Fixed width for label similar to old UI
-          child: Text(
-            "${widget.label}:",
-            style: TextStyle(fontSize: 13, color: Pallet.font1),
-          ),
-        ),
-        const SizedBox(width: 5),
-        Expanded(
-          child: SizedBox(
-            height: 30, // Compact height
-            child: TextFormField(
-              controller: _controller,
-              focusNode: _focusNode,
-              keyboardType: widget.keyboardType,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-              ), // Reduced font size
-              cursorColor: Colors.white70,
-              cursorHeight: 12,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Pallet.inside2,
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(5),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 8,
-                ),
-                hintText: 'Enter ${widget.label.toLowerCase()}',
-                hintStyle: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 12,
-                ),
-              ),
-              onChanged: widget.onChanged,
+        if (widget.showLabel)
+          SizedBox(
+            width: 80, // Fixed width for label similar to old UI
+            child: Text(
+              "${widget.label}:",
+              style: TextStyle(fontSize: 13, color: Pallet.font1),
             ),
           ),
-        ),
+        if (widget.showLabel) const SizedBox(width: 5),
+        if (widget.showLabel) const SizedBox(width: 5),
+        if (widget.width != null)
+          SizedBox(width: widget.width, height: 30, child: _buildTextField())
+        else
+          Expanded(child: SizedBox(height: 30, child: _buildTextField())),
       ],
+    );
+  }
+
+  Widget _buildTextField() {
+    return TextFormField(
+      controller: _controller,
+      focusNode: _focusNode,
+      keyboardType: widget.keyboardType,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 11,
+      ), // Reduced font size
+      cursorColor: Colors.white70,
+      cursorHeight: 12,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Pallet.inside2,
+        isDense: true,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(5),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        hintText: 'Enter ${widget.label.toLowerCase()}',
+        hintStyle: TextStyle(
+          color: Colors.white.withOpacity(0.5),
+          fontSize: 12,
+        ),
+      ),
+      onChanged: widget.onChanged,
     );
   }
 }

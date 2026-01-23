@@ -23,7 +23,7 @@ class _PropertyIconSelectorState extends State<PropertyIconSelector> {
   int _offset = 0;
   final int _limit = 50;
 
-  String? _searchQuery;
+  String _searchQuery = '';
   Timer? _debounce;
 
   @override
@@ -132,7 +132,7 @@ class _PropertyIconSelectorState extends State<PropertyIconSelector> {
                 if (_debounce?.isActive ?? false) _debounce!.cancel();
                 _debounce = Timer(const Duration(milliseconds: 500), () {
                   debugPrint('Debounce fired. Query: "$value"');
-                  _searchQuery = value.isEmpty ? null : value;
+                  _searchQuery = value;
                   _fetchSvgs(refresh: true);
                 });
               },

@@ -8,7 +8,13 @@ class ComponentPropertiesFactory {
   // Get default properties for a component type
   static ComponentProperties getDefaultProperties(ComponentType type) {
     switch (type) {
-{{CASES_GET_DEFAULT_PROPERTIES}}
+      {{CASES_GET_DEFAULT_PROPERTIES}}
+    }
+  }
+
+  static Map<String, String? Function(dynamic)> getValidators(ComponentType type) {
+    switch (type) {
+{{CASES_GET_VALIDATORS}}
     }
   }
 }

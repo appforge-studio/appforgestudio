@@ -33,6 +33,7 @@ const app = new ArriApp({
     const origin = event.node.req.headers.origin;
     const allowedOrigins = [
       "http://192.168.141.133:3000",
+      "http://127.0.0.1:3000",
     ];
 
     // Allow all localhost ports
@@ -103,20 +104,20 @@ app.route(
         // Use h3's readMultipartFormData with better error handling
         const form = await readMultipartFormData(event).catch((parseError: any) => {
           console.error("Multipart parsing error:", parseError);
-          
+
           // If parsing fails due to size, provide helpful error message
-          if (parseError?.message?.includes('Invalid array length') || 
-              parseError?.message?.includes('Maximum call stack') ||
-              parseError?.message?.includes('out of memory')) {
+          if (parseError?.message?.includes('Invalid array length') ||
+            parseError?.message?.includes('Maximum call stack') ||
+            parseError?.message?.includes('out of memory')) {
             throw new Error("File too large for processing. Please try a smaller file (under 50MB).");
           }
-          
+
           throw new Error("Failed to parse upload data: " + (parseError?.message || 'Unknown error'));
         });
 
         console.log("Form received, length:", form?.length);
         console.log("All form parts:", form?.map(p => ({ name: p.name, type: p.type, filename: p.filename, dataLength: p.data?.length })));
-        
+
         if (!form || form.length === 0) {
           console.log("No form data received");
           return { success: false, message: "No form data received" };
@@ -125,7 +126,7 @@ app.route(
         const filePart = form.find((p) => p.name === "file");
         const directoryField = form.find((p) => p.name === "directory");
         const userIdField = form.find((p) => p.name === "userId");
-        
+
         console.log("File part:", filePart ? { filename: filePart.filename, type: filePart.type, dataLength: filePart.data?.length } : null);
         console.log("UserId field:", userIdField?.data?.toString("utf8"));
         console.log("Directory field:", directoryField?.data?.toString("utf8"));
@@ -161,17 +162,17 @@ app.route(
         };
       } catch (err: any) {
         console.error("Upload error", err);
-        
+
         // Provide more specific error messages
-        if (err?.message?.includes('Invalid array length') || 
-            err?.message?.includes('Maximum call stack') ||
-            err?.message?.includes('out of memory')) {
-          return { 
-            success: false, 
-            message: "File too large to process. Please try a smaller file (under 50MB)." 
+        if (err?.message?.includes('Invalid array length') ||
+          err?.message?.includes('Maximum call stack') ||
+          err?.message?.includes('out of memory')) {
+          return {
+            success: false,
+            message: "File too large to process. Please try a smaller file (under 50MB)."
           };
         }
-        
+
         return { success: false, message: "Upload failed: " + (err?.message || 'Unknown error') };
       }
     },
@@ -276,7 +277,7 @@ app.route(
         }
 
         const result = await chunkUploadManager.finalizeUpload(sessionId);
-        
+
         if (!result.success || !result.filePath) {
           return result;
         }

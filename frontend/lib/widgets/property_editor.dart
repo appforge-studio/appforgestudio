@@ -11,55 +11,10 @@ import 'property_text_field.dart';
 import 'property_color_field.dart';
 import 'property_icon_field.dart';
 import 'property_side_field.dart';
-
-class EnablePropertyWrapper extends StatelessWidget {
-  final Property property;
-  final Widget child;
-  final Function(bool) onEnableChanged;
-
-  const EnablePropertyWrapper({
-    super.key,
-    required this.property,
-    required this.child,
-    required this.onEnableChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!property.enable.show) return child;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 0),
-          child: Checkbox(
-            value: property.enable.enabled,
-            onChanged: (bool? value) {
-              if (value != null) {
-                onEnableChanged(value);
-              }
-            },
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            activeColor: Pallet.inside3,
-            checkColor: Colors.white,
-            side: BorderSide(color: Pallet.font2),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Opacity(
-            opacity: property.enable.enabled ? 1.0 : 0.5,
-            child: IgnorePointer(
-              ignoring: !property.enable.enabled,
-              child: child,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
+import 'property_shadow_editor.dart';
+import 'property_background_blur_editor.dart';
+import 'property_font_selector.dart';
+import 'property_overlay_dropdown.dart';
 
 class PropertyEditor extends StatelessWidget {
   const PropertyEditor({super.key});
@@ -111,36 +66,10 @@ class PropertyEditor extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 5),
-            // Header Actions
-            SizedBox(
-              height: 30,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(left: 10),
-                children: [
-                  _buildHeaderAction(
-                    icon: Icons.question_mark,
-                    label: "Condition",
-                    color: Colors.blue,
-                    onTap: () {},
-                  ),
-                  _buildHeaderAction(
-                    icon: Icons.delete,
-                    label: "Delete",
-                    color: Colors.red,
-                    onTap: () {
-                      // Implement delete logic later
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-
             // Property fields
             Expanded(
               child: SingleChildScrollView(
-                // padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: GenericPropertyEditor(
                   properties: component.properties,
                   onChanged: (newProperties) {
@@ -157,34 +86,6 @@ class PropertyEditor extends StatelessWidget {
       );
     });
   }
-
-  Widget _buildHeaderAction({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 5),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          color: Pallet.inside1,
-          border: Border.all(color: Pallet.inside2),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(width: 2),
-            Text(label, style: TextStyle(fontSize: 12, color: Pallet.font1)),
-            const SizedBox(width: 5),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class GenericPropertyEditor extends StatelessWidget {
@@ -199,18 +100,93 @@ class GenericPropertyEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Filter out properties that are handled by specialized editors (like ShadowEditor)
+    // The "shadow" boolean property is the trigger for the editor.
+    final ignoredProperties = [
+      'shadowColor',
+      'shadowBlur',
+      'shadowSpread',
+      'shadowX',
+      'shadowY',
+      'backgroundBlurOpacity',
+    ];
+
+    final availableProperties = properties.properties.where((p) {
+      if (ignoredProperties.contains(p.key)) return false;
+
+      // Conditional visibility
+      if (p.key == 'borderWidth') {
+        return properties.shouldApplyProperty('border');
+      }
+
+      return true;
+    }).toList();
+
+    // Group properties
+    final Map<String, List<Property>> groupedProperties = {};
+    for (var property in availableProperties) {
+      if (!groupedProperties.containsKey(property.group)) {
+        groupedProperties[property.group] = [];
+      }
+      groupedProperties[property.group]!.add(property);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: properties.properties.map((property) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: _buildFieldForProperty(property),
+      children: groupedProperties.entries.map((entry) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12, top: 4),
+              child: Text(
+                entry.key.toUpperCase(),
+                style: TextStyle(
+                  color: Pallet.font2,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            ...entry.value.map((property) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _buildFieldForProperty(property),
+              );
+            }),
+            // Add a divider after each group
+            Divider(color: Pallet.inside2, height: 1),
+            const SizedBox(height: 16),
+          ],
         );
       }).toList(),
     );
   }
 
   Widget _buildFieldForProperty(Property property) {
+    if (property.key == 'shadow') {
+      return PropertyShadowEditor(
+        properties: properties, // Pass full properties to access siblings
+        onChanged: onChanged,
+      );
+    }
+
+    if (property.key == 'backgroundBlur') {
+      return PropertyBackgroundBlurEditor(
+        properties: properties, // Pass full properties to access siblings
+        onChanged: onChanged,
+      );
+    }
+
+    if (property.key == 'fontFamily') {
+      return _buildFontField(property as StringProperty);
+    }
+
+    if (property.key == 'fontWeight') {
+      return _buildWeightField(property as DropdownProperty);
+    }
+
     switch (property.type) {
       case PropertyType.string:
         return _buildStringField(property as StringProperty);
@@ -231,22 +207,117 @@ class GenericPropertyEditor extends StatelessWidget {
     }
   }
 
+  Widget _buildPropertyRow({
+    required Property property,
+    required Widget child,
+    bool showLabel = true,
+    bool expandField = true,
+  }) {
+    // If property acts as a section or special type, might handle differently.
+    // For now, standard layout: Label (80px) -> Checkbox (if enabled) -> Input (Expanded)
+
+    // Checkbox logic
+    Widget? checkbox;
+    if (property.enable.show) {
+      checkbox = Padding(
+        padding: const EdgeInsets.only(right: 5),
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: Checkbox(
+            value: property.enable.enabled,
+            onChanged: (bool? value) {
+              if (value != null) {
+                _updateEnable(property.key, value);
+              }
+            },
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            activeColor: Pallet.inside3,
+            checkColor: Colors.white,
+            side: BorderSide(color: Pallet.font2, width: 1.5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Logic for layout:
+    // If expandField is true: Label -> Checkbox -> Expanded(Child)
+    // If expandField is false: Label -> Spacer -> Checkbox -> Child (Child must have size)
+
+    if (expandField) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (showLabel)
+            SizedBox(
+              width: 80,
+              child: Text(
+                "${property.displayName}:",
+                style: TextStyle(fontSize: 13, color: Pallet.font1),
+              ),
+            ),
+
+          if (checkbox != null) checkbox,
+
+          Expanded(
+            child: Opacity(
+              opacity: property.enable.enabled ? 1.0 : 0.5,
+              child: IgnorePointer(
+                ignoring: !property.enable.enabled,
+                child: child,
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      // Right aligned (fixed width child)
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (showLabel)
+            SizedBox(
+              width: 80,
+              child: Text(
+                "${property.displayName}:",
+                style: TextStyle(fontSize: 13, color: Pallet.font1),
+              ),
+            ),
+
+          const Spacer(), // Pushes Checkbox + Child to right
+
+          if (checkbox != null) checkbox,
+
+          Opacity(
+            opacity: property.enable.enabled ? 1.0 : 0.5,
+            child: IgnorePointer(
+              ignoring: !property.enable.enabled,
+              child: child,
+            ),
+          ),
+        ],
+      );
+    }
+  }
+
   Widget _buildStringField(StringProperty property) {
-    return EnablePropertyWrapper(
+    return _buildPropertyRow(
       property: property,
-      onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
       child: PropertyTextField(
         label: property.displayName,
         value: property.value,
         onChanged: (value) => _updateValue(property.key, value),
+        showLabel: false,
       ),
     );
   }
 
   Widget _buildNumberField(NumberProperty property) {
-    return EnablePropertyWrapper(
+    return _buildPropertyRow(
       property: property,
-      onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
       child: PropertyTextField(
         label: property.displayName,
         value: property.value.toString(),
@@ -257,80 +328,76 @@ class GenericPropertyEditor extends StatelessWidget {
             _updateValue(property.key, numValue);
           }
         },
+        showLabel: false,
+        width: 60,
       ),
+      expandField: false,
     );
   }
 
   Widget _buildColorField(ComponentColorProperty property) {
-    return EnablePropertyWrapper(
+    return _buildPropertyRow(
       property: property,
-      onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
       child: PropertyColorField(
         label: property.displayName,
         value: property.value,
         onChanged: (newValue) => _updateValue(property.key, newValue),
+        showLabel: false,
+        width: 30, // Square shape
       ),
+      expandField: false,
     );
   }
 
   Widget _buildBooleanField(BooleanProperty property) {
-    return EnablePropertyWrapper(
+    // For boolean, simpler to just show Checkbox -> Switch?
+    // Or keep Label -> Checkbox -> Switch.
+    return _buildPropertyRow(
       property: property,
-      onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
-      child: Row(
-        children: [
-          Text(property.displayName, style: const TextStyle(fontSize: 14)),
-          const Spacer(),
-          Switch(
-            value: property.value,
-            onChanged: (value) => _updateValue(property.key, value),
-          ),
-        ],
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Switch(
+          value: property.value,
+          onChanged: (value) => _updateValue(property.key, value),
+        ),
       ),
     );
   }
 
   Widget _buildDropdownField(DropdownProperty property) {
-    // DropdownProperty is generic, but we treat it as dynamic here for UI building
-    return EnablePropertyWrapper(
+    return _buildPropertyRow(
       property: property,
-      onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            property.displayName,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+      child: DropdownButtonFormField<dynamic>(
+        value: property.value,
+        decoration: InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: Pallet.inside2,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(5),
+            borderSide: BorderSide.none,
           ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<dynamic>(
-            value: property.value,
-            decoration: InputDecoration(
-              isDense: true,
-              filled: true,
-              fillColor: Pallet.inside2,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(5),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
+        ),
+        items: property.options.map<DropdownMenuItem<dynamic>>((option) {
+          return DropdownMenuItem<dynamic>(
+            value: option,
+            child: Text(
+              property.displayText(option),
+              style: TextStyle(fontSize: 12, color: Pallet.font1),
             ),
-            items: property.options.map<DropdownMenuItem<dynamic>>((option) {
-              return DropdownMenuItem<dynamic>(
-                value: option,
-                child: Text(property.displayText(option)),
-              );
-            }).toList(),
-            onChanged: (newValue) {
-              if (newValue != null) {
-                _updateValue(property.key, newValue);
-              }
-            },
-          ),
-        ],
+          );
+        }).toList(),
+        onChanged: (newValue) {
+          if (newValue != null) {
+            _updateValue(property.key, newValue);
+          }
+        },
+        style: TextStyle(fontSize: 12, color: Pallet.font1),
+        dropdownColor: Pallet.inside1,
       ),
     );
   }
@@ -341,27 +408,62 @@ class GenericPropertyEditor extends StatelessWidget {
       labels = ['tl', 'tr', 'br', 'bl'];
     }
 
-    return EnablePropertyWrapper(
+    return _buildPropertyRow(
       property: property,
-      onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
       child: PropertySideField(
         label: property.displayName,
         value: property.value,
         onChanged: (newValue) => _updateValue(property.key, newValue),
         labels: labels,
+        showLabel: false,
       ),
     );
   }
 
   Widget _buildIconField(IconProperty property) {
-    return EnablePropertyWrapper(
+    return _buildPropertyRow(
       property: property,
-      onEnableChanged: (enabled) => _updateEnable(property.key, enabled),
       child: PropertyIconField(
         label: property.displayName,
         value: property.value,
         onChanged: (newValue) => _updateValue(property.key, newValue),
+        showLabel: false,
       ),
+    );
+  }
+
+  Widget _buildFontField(StringProperty property) {
+    return _buildPropertyRow(
+      property: property,
+      child: SizedBox(
+        width: 120,
+        child: PropertyFontSelector(
+          label: property.displayName,
+          value: property.value,
+          onChanged: (newValue) => _updateValue(property.key, newValue),
+          showLabel: false,
+        ),
+      ),
+      expandField: false,
+    );
+  }
+
+  Widget _buildWeightField(DropdownProperty property) {
+    return _buildPropertyRow(
+      property: property,
+      child: SizedBox(
+        width: 100,
+        child: PropertyOverlayDropdown(
+          value: property.value,
+          items: property.options,
+          onChanged: (newValue) {
+            _updateValue(property.key, newValue);
+          },
+          showLabel: false,
+          itemLabelBuilder: (val) => property.displayText(val),
+        ),
+      ),
+      expandField: false,
     );
   }
 

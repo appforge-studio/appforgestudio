@@ -36,6 +36,15 @@ class ArriClient {
     timeout: _timeout,
   );
 
+  ArriClientAiService get ai => ArriClientAiService(
+    baseUrl: _baseUrl,
+    headers: _headers,
+    httpClient: _httpClient,
+    onError: _onError,
+    heartbeatTimeoutMultiplier: _heartbeatTimeoutMultiplier,
+    timeout: _timeout,
+  );
+
   ArriClientSvgService get svg => ArriClientSvgService(
     baseUrl: _baseUrl,
     headers: _headers,
@@ -169,6 +178,77 @@ class ArriClientAdminService {
       clientVersion: _clientVersion,
       params: params.toJson(),
       parser: (body) => UpdateTypeDefinitionResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+}
+
+class ArriClientAiService {
+  final http.Client? _httpClient;
+  final String _baseUrl;
+  final String _clientVersion = "";
+  final FutureOr<Map<String, String>> Function()? _headers;
+  final Function(Object)? _onError;
+  final int? _heartbeatTimeoutMultiplier;
+  final Duration? _timeout;
+  ArriClientAiService({
+    http.Client? httpClient,
+    required String baseUrl,
+    FutureOr<Map<String, String>> Function()? headers,
+    Function(Object)? onError,
+    int? heartbeatTimeoutMultiplier,
+    Duration? timeout,
+  }) : _httpClient = httpClient,
+       _baseUrl = baseUrl,
+       _headers = headers,
+       _onError = onError,
+       _heartbeatTimeoutMultiplier = heartbeatTimeoutMultiplier,
+       _timeout = timeout;
+
+  Future<GenerateDesignResponse> generate_design(
+    GenerateDesignParams params,
+  ) async {
+    return parsedArriRequest(
+      "$_baseUrl/ai/generate-design",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => GenerateDesignResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+
+  Future<GenerateImageResponse> generate_image(
+    GenerateImageParams params,
+  ) async {
+    return parsedArriRequest(
+      "$_baseUrl/ai/generate-image",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => GenerateImageResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+
+  Future<AiIterateDesignResponse> iterate_design(
+    AiIterateDesignParams params,
+  ) async {
+    return parsedArriRequest(
+      "$_baseUrl/ai/iterate-design",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => AiIterateDesignResponse.fromJsonString(body),
       onError: _onError,
       timeout: _timeout,
     );
@@ -1754,10 +1834,495 @@ class UpdateTypeDefinitionResponse implements ArriModel {
   }
 }
 
+class GenerateDesignParams implements ArriModel {
+  final String prompt;
+  final String sessionId;
+  const GenerateDesignParams({required this.prompt, required this.sessionId});
+
+  factory GenerateDesignParams.empty() {
+    return GenerateDesignParams(prompt: "", sessionId: "");
+  }
+
+  factory GenerateDesignParams.fromJson(Map<String, dynamic> _input_) {
+    final prompt = typeFromDynamic<String>(_input_["prompt"], "");
+    final sessionId = typeFromDynamic<String>(_input_["sessionId"], "");
+    return GenerateDesignParams(prompt: prompt, sessionId: sessionId);
+  }
+
+  factory GenerateDesignParams.fromJsonString(String input) {
+    return GenerateDesignParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "prompt": prompt,
+      "sessionId": sessionId,
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("prompt=$prompt");
+    _queryParts_.add("sessionId=$sessionId");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GenerateDesignParams copyWith({String? prompt, String? sessionId}) {
+    return GenerateDesignParams(
+      prompt: prompt ?? this.prompt,
+      sessionId: sessionId ?? this.sessionId,
+    );
+  }
+
+  @override
+  List<Object?> get props => [prompt, sessionId];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GenerateDesignParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GenerateDesignParams ${toJsonString()}";
+  }
+}
+
+class GenerateDesignResponse implements ArriModel {
+  final bool success;
+  final String message;
+  final dynamic data;
+  const GenerateDesignResponse({
+    required this.success,
+    required this.message,
+    required this.data,
+  });
+
+  factory GenerateDesignResponse.empty() {
+    return GenerateDesignResponse(success: false, message: "", data: null);
+  }
+
+  factory GenerateDesignResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    final message = typeFromDynamic<String>(_input_["message"], "");
+    final data = _input_["data"];
+    return GenerateDesignResponse(
+      success: success,
+      message: message,
+      data: data,
+    );
+  }
+
+  factory GenerateDesignResponse.fromJsonString(String input) {
+    return GenerateDesignResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "success": success,
+      "message": message,
+      "data": data,
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("success=$success");
+    _queryParts_.add("message=$message");
+    print(
+      "[WARNING] any's cannot be serialized to query params. Skipping field at /GenerateDesignResponse/data.",
+    );
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GenerateDesignResponse copyWith({
+    bool? success,
+    String? message,
+    dynamic data,
+  }) {
+    return GenerateDesignResponse(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      data: data ?? this.data,
+    );
+  }
+
+  @override
+  List<Object?> get props => [success, message, data];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GenerateDesignResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GenerateDesignResponse ${toJsonString()}";
+  }
+}
+
+class GenerateImageParams implements ArriModel {
+  final String prompt;
+  final String? negativePrompt;
+  final double? width;
+  final double? height;
+  final double? steps;
+  const GenerateImageParams({
+    required this.prompt,
+    this.negativePrompt,
+    this.width,
+    this.height,
+    this.steps,
+  });
+
+  factory GenerateImageParams.empty() {
+    return GenerateImageParams(prompt: "");
+  }
+
+  factory GenerateImageParams.fromJson(Map<String, dynamic> _input_) {
+    final prompt = typeFromDynamic<String>(_input_["prompt"], "");
+    final negativePrompt = nullableTypeFromDynamic<String>(
+      _input_["negativePrompt"],
+    );
+    final width = nullableDoubleFromDynamic(_input_["width"]);
+    final height = nullableDoubleFromDynamic(_input_["height"]);
+    final steps = nullableDoubleFromDynamic(_input_["steps"]);
+    return GenerateImageParams(
+      prompt: prompt,
+      negativePrompt: negativePrompt,
+      width: width,
+      height: height,
+      steps: steps,
+    );
+  }
+
+  factory GenerateImageParams.fromJsonString(String input) {
+    return GenerateImageParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"prompt": prompt};
+    if (negativePrompt != null) _output_["negativePrompt"] = negativePrompt;
+    if (width != null) _output_["width"] = width;
+    if (height != null) _output_["height"] = height;
+    if (steps != null) _output_["steps"] = steps;
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("prompt=$prompt");
+    if (negativePrompt != null)
+      _queryParts_.add("negativePrompt=$negativePrompt");
+    if (width != null) _queryParts_.add("width=$width");
+    if (height != null) _queryParts_.add("height=$height");
+    if (steps != null) _queryParts_.add("steps=$steps");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GenerateImageParams copyWith({
+    String? prompt,
+    String? Function()? negativePrompt,
+    double? Function()? width,
+    double? Function()? height,
+    double? Function()? steps,
+  }) {
+    return GenerateImageParams(
+      prompt: prompt ?? this.prompt,
+      negativePrompt: negativePrompt != null
+          ? negativePrompt()
+          : this.negativePrompt,
+      width: width != null ? width() : this.width,
+      height: height != null ? height() : this.height,
+      steps: steps != null ? steps() : this.steps,
+    );
+  }
+
+  @override
+  List<Object?> get props => [prompt, negativePrompt, width, height, steps];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GenerateImageParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GenerateImageParams ${toJsonString()}";
+  }
+}
+
+class GenerateImageResponse implements ArriModel {
+  final bool success;
+  final String message;
+  final String? url;
+  const GenerateImageResponse({
+    required this.success,
+    required this.message,
+    this.url,
+  });
+
+  factory GenerateImageResponse.empty() {
+    return GenerateImageResponse(success: false, message: "");
+  }
+
+  factory GenerateImageResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    final message = typeFromDynamic<String>(_input_["message"], "");
+    final url = nullableTypeFromDynamic<String>(_input_["url"]);
+    return GenerateImageResponse(success: success, message: message, url: url);
+  }
+
+  factory GenerateImageResponse.fromJsonString(String input) {
+    return GenerateImageResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"success": success, "message": message};
+    if (url != null) _output_["url"] = url;
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("success=$success");
+    _queryParts_.add("message=$message");
+    if (url != null) _queryParts_.add("url=$url");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GenerateImageResponse copyWith({
+    bool? success,
+    String? message,
+    String? Function()? url,
+  }) {
+    return GenerateImageResponse(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      url: url != null ? url() : this.url,
+    );
+  }
+
+  @override
+  List<Object?> get props => [success, message, url];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GenerateImageResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GenerateImageResponse ${toJsonString()}";
+  }
+}
+
+class AiIterateDesignParams implements ArriModel {
+  final String sessionId;
+  final String prompt;
+  const AiIterateDesignParams({required this.sessionId, required this.prompt});
+
+  factory AiIterateDesignParams.empty() {
+    return AiIterateDesignParams(sessionId: "", prompt: "");
+  }
+
+  factory AiIterateDesignParams.fromJson(Map<String, dynamic> _input_) {
+    final sessionId = typeFromDynamic<String>(_input_["sessionId"], "");
+    final prompt = typeFromDynamic<String>(_input_["prompt"], "");
+    return AiIterateDesignParams(sessionId: sessionId, prompt: prompt);
+  }
+
+  factory AiIterateDesignParams.fromJsonString(String input) {
+    return AiIterateDesignParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "sessionId": sessionId,
+      "prompt": prompt,
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("sessionId=$sessionId");
+    _queryParts_.add("prompt=$prompt");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  AiIterateDesignParams copyWith({String? sessionId, String? prompt}) {
+    return AiIterateDesignParams(
+      sessionId: sessionId ?? this.sessionId,
+      prompt: prompt ?? this.prompt,
+    );
+  }
+
+  @override
+  List<Object?> get props => [sessionId, prompt];
+
+  @override
+  bool operator ==(Object other) {
+    return other is AiIterateDesignParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "AiIterateDesignParams ${toJsonString()}";
+  }
+}
+
+class AiIterateDesignResponse implements ArriModel {
+  final bool success;
+  final String message;
+  final dynamic data;
+  const AiIterateDesignResponse({
+    required this.success,
+    required this.message,
+    required this.data,
+  });
+
+  factory AiIterateDesignResponse.empty() {
+    return AiIterateDesignResponse(success: false, message: "", data: null);
+  }
+
+  factory AiIterateDesignResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    final message = typeFromDynamic<String>(_input_["message"], "");
+    final data = _input_["data"];
+    return AiIterateDesignResponse(
+      success: success,
+      message: message,
+      data: data,
+    );
+  }
+
+  factory AiIterateDesignResponse.fromJsonString(String input) {
+    return AiIterateDesignResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "success": success,
+      "message": message,
+      "data": data,
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("success=$success");
+    _queryParts_.add("message=$message");
+    print(
+      "[WARNING] any's cannot be serialized to query params. Skipping field at /AiIterateDesignResponse/data.",
+    );
+    return _queryParts_.join("&");
+  }
+
+  @override
+  AiIterateDesignResponse copyWith({
+    bool? success,
+    String? message,
+    dynamic data,
+  }) {
+    return AiIterateDesignResponse(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      data: data ?? this.data,
+    );
+  }
+
+  @override
+  List<Object?> get props => [success, message, data];
+
+  @override
+  bool operator ==(Object other) {
+    return other is AiIterateDesignResponse &&
+        listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "AiIterateDesignResponse ${toJsonString()}";
+  }
+}
+
 class GetSvgsParams implements ArriModel {
   final int limit;
   final int offset;
-  final String? search;
+  final String search;
   const GetSvgsParams({
     required this.limit,
     required this.offset,
@@ -1765,13 +2330,13 @@ class GetSvgsParams implements ArriModel {
   });
 
   factory GetSvgsParams.empty() {
-    return GetSvgsParams(limit: 0, offset: 0, search: null);
+    return GetSvgsParams(limit: 0, offset: 0, search: "");
   }
 
   factory GetSvgsParams.fromJson(Map<String, dynamic> _input_) {
     final limit = intFromDynamic(_input_["limit"], 0);
     final offset = intFromDynamic(_input_["offset"], 0);
-    final search = nullableTypeFromDynamic<String>(_input_["search"]);
+    final search = typeFromDynamic<String>(_input_["search"], "");
     return GetSvgsParams(limit: limit, offset: offset, search: search);
   }
 
@@ -1805,15 +2370,11 @@ class GetSvgsParams implements ArriModel {
   }
 
   @override
-  GetSvgsParams copyWith({
-    int? limit,
-    int? offset,
-    String? Function()? search,
-  }) {
+  GetSvgsParams copyWith({int? limit, int? offset, String? search}) {
     return GetSvgsParams(
       limit: limit ?? this.limit,
       offset: offset ?? this.offset,
-      search: search != null ? search() : this.search,
+      search: search ?? this.search,
     );
   }
 

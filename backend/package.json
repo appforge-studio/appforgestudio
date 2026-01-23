@@ -14,6 +14,9 @@
         "@env": "../env.ts"
     },
     "dependencies": {
+        "@arrirpc/schema": "^0.81.1",
+        "@arrirpc/server": "^0.81.1",
+        "@google/generative-ai": "^0.24.1",
         "ulidx": "^2.4.1"
     }
 }

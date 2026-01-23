@@ -9,4 +9,6 @@ class {{CLASS_NAME}}Properties {
       {{PROPERTIES_CODE}}
     ]);
   }
+
+  {{VALIDATION_LOGIC}}
 }

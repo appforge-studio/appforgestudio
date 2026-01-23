@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:appforge/models/enums.dart';
 import 'package:appforge/components/component_factory.dart';
+import 'package:appforge/models/types/color.dart';
 import 'package:appforge/controllers/canvas_controller.dart';
 
 void main() {
@@ -74,11 +74,42 @@ void main() {
 
       expect(containerSchema['type'], equals('container'));
       expect(textSchema['type'], equals('text'));
-      expect(imageSchema['type'], equals('sized_box'));
+      expect(imageSchema['type'], equals('image'));
 
       expect(containerSchema['args'], isA<Map<String, dynamic>>());
+      expect(
+        containerSchema['args']['decoration'],
+        isA<Map<String, dynamic>>(),
+      );
+      // Border is false by default, so it shouldn't be in the schema yet
+      expect(
+        containerSchema['args']['decoration'].containsKey('border'),
+        isFalse,
+      );
+
       expect(textSchema['args'], isA<Map<String, dynamic>>());
       expect(imageSchema['args'], isA<Map<String, dynamic>>());
+
+      // Test with border enabled
+      final borderedContainer = container.copyWith(
+        properties: container.properties
+            .updatePropertyEnabled('borderColor', true)
+            .updateProperty('borderWidth', 2.0)
+            .updateProperty('borderColor', XDColor(['#FF0000'])),
+      );
+      final borderedSchema = ComponentFactory.toJsonSchema(borderedContainer);
+      expect(
+        borderedSchema['args']['decoration'].containsKey('border'),
+        isTrue,
+      );
+      expect(
+        borderedSchema['args']['decoration']['border']['width'],
+        equals(2.0),
+      );
+      expect(
+        borderedSchema['args']['decoration']['border']['color'],
+        equals('#FFFF0000'),
+      );
     });
   });
 

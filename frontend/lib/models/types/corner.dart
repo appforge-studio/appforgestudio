@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 enum CornerType {
   /// Apply radius to all corners
   all,
+
   /// Apply radius to specific corners
   corner,
 }
@@ -17,15 +18,16 @@ class XDCorner {
   final CornerType type;
 
   /// Creates an XDCorner with the given values and type
-  const XDCorner({
-    required this.values,
-    this.type = CornerType.corner,
-  }) : assert(values.length == 4, 'Corner values must contain exactly 4 elements');
+  const XDCorner({required this.values, this.type = CornerType.corner})
+    : assert(
+        values.length == 4,
+        'Corner values must contain exactly 4 elements',
+      );
 
   /// Creates uniform corner radius for all corners
   XDCorner.all(double value)
-      : values = [value, value, value, value],
-        type = CornerType.all;
+    : values = [value, value, value, value],
+      type = CornerType.all;
 
   /// Creates corner radius with individual corner values
   XDCorner.corners({

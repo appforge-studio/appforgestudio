@@ -18,6 +18,8 @@ export interface ComponentProperty {
   name: string;
   type: 'string' | 'number' | 'boolean' | 'color' | 'icon';
   initialValue: any;
+  group?: string;
+  displayName?: string;
 }
 
 // Helper to convert PascalCase/camelCase to snake_case for filenames if needed, 
@@ -113,6 +115,11 @@ export async function generateComponentFactories() {
         return ${c.className}Properties.createDefault();`
   ).join('\n');
 
+  const casesGetValidators = components.map(c =>
+    `      case ComponentType.${c.name}:
+        return ${c.className}Properties.validators;`
+  ).join('\n');
+
   const casesCreateWithProperties = components.map(c =>
     `      case ComponentType.${c.name}:
         return ${c.className}Component(
@@ -146,7 +153,8 @@ export async function generateComponentFactories() {
   const propertiesFactoryImports = components.map(c => `import '${c.name}/properties.dart';`).join('\n');
   const componentPropertiesFactoryContent = await readAndFillTemplate(join(templatesDir, 'component_properties_factory.dart.tpl'), {
     IMPORTS: propertiesFactoryImports,
-    CASES_GET_DEFAULT_PROPERTIES: casesGetDefaultPropertiesFactory
+    CASES_GET_DEFAULT_PROPERTIES: casesGetDefaultPropertiesFactory,
+    CASES_GET_VALIDATORS: casesGetValidators
   });
 
   // 3. Generate frontend/lib/components/components.dart (Exports)
@@ -182,54 +190,84 @@ export async function createComponentFiles(options: CreateComponentOptions) {
 
   // Generate Properties Code
   const propertiesCode = properties.map(prop => {
+    const displayName = prop.displayName || prop.name;
     switch (prop.type) {
       case 'string':
         return `      const StringProperty(
         key: '${prop.name}',
-        displayName: '${prop.name}',
+        displayName: '${displayName}',
         value: '${prop.initialValue}',
+        group: '${prop.group ?? 'General'}',
         enable: Enabled(show: true, enabled: true),
       ),`;
       case 'number':
         return `      const NumberProperty(
         key: '${prop.name}',
-        displayName: '${prop.name}',
+        displayName: '${displayName}',
         value: ${prop.initialValue},
         min: 0.0,
         max: 1000.0,
+        group: '${prop.group ?? 'General'}',
         enable: Enabled(show: true, enabled: true),
       ),`;
       case 'boolean':
         return `      const BooleanProperty(
         key: '${prop.name}',
-        displayName: '${prop.name}',
+        displayName: '${displayName}',
         value: ${prop.initialValue},
+        group: '${prop.group ?? 'General'}',
         enable: Enabled(show: true, enabled: true),
       ),`;
       case 'color':
         return `      const ComponentColorProperty(
         key: '${prop.name}',
-        displayName: '${prop.name}',
+        displayName: '${displayName}',
         value: XDColor(
              ['${prop.initialValue}'],
              type: ColorType.solid,
              stops: [],
              begin: Alignment.topLeft,
              end: Alignment.bottomRight,
-        ),
+         ),
         enable: Enabled(show: true, enabled: true),
+        group: '${prop.group ?? 'General'}',
       ),`;
       case 'icon':
         return `      const IconProperty(
             key: '${prop.name}',
-            displayName: '${prop.name}',
+            displayName: '${displayName}',
             value: '${prop.initialValue}',
+            group: '${prop.group ?? 'General'}',
             enable: Enabled(show: false, enabled: true),
           ),`;
       default:
         return '';
     }
   }).join('\n');
+
+  // Generate Validation Logic
+  const validationLogic = `static Map<String, String? Function(dynamic)> get validators => {
+${properties.map(prop => {
+    switch (prop.type) {
+      case 'string':
+      case 'icon':
+        return `    '${prop.name}': (value) => value is String ? null : '${prop.name} must be a string',`;
+      case 'number':
+        return `    '${prop.name}': (value) => value is num ? null : '${prop.name} must be a number',`;
+      case 'boolean':
+        return `    '${prop.name}': (value) => value is bool ? null : '${prop.name} must be a boolean',`;
+      case 'color':
+        return `    '${prop.name}': (value) {
+      if (value is XDColor) return null;
+      if (value is String && (value.startsWith('#') || value.startsWith('0x'))) return null;
+      if (value is Map && value.containsKey('value')) return null; // JSON structure for color
+      return '${prop.name} must be a valid color (Hex string, XDColor, or JSON object)';
+    },`;
+      default:
+        return `    '${prop.name}': (value) => null,`;
+    }
+  }).join('\n')}
+  };`;
 
   // component.dart content
   let componentContent = componentCode;
@@ -245,7 +283,8 @@ export async function createComponentFiles(options: CreateComponentOptions) {
   // properties.dart content
   const propertiesContent = await readAndFillTemplate(join(templatesDir, 'component_properties.dart.tpl'), {
     CLASS_NAME: className,
-    PROPERTIES_CODE: propertiesCode
+    PROPERTIES_CODE: propertiesCode,
+    VALIDATION_LOGIC: validationLogic
   });
 
   await fs.writeFile(join(componentDir, 'component.dart'), componentContent);

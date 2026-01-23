@@ -1,167 +1,450 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:json_dynamic_widget/json_dynamic_widget.dart';
 import '../controllers/canvas_controller.dart';
 import '../models/component_model.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+
+import '../services/upload_service.dart';
 import '../components/component_factory.dart';
 import '../utilities/component_dimensions.dart';
-import '../models/types/color.dart';
 import 'component_overlay_layer.dart';
 import '../utilities/component_overlay_manager.dart';
+import 'box_selection_overlay.dart';
+import 'image_generator_dialog.dart';
 
-class DesignCanvas extends StatelessWidget {
+class DesignCanvas extends StatefulWidget {
   const DesignCanvas({super.key});
 
   @override
+  State<DesignCanvas> createState() => _DesignCanvasState();
+}
+
+class _DesignCanvasState extends State<DesignCanvas> {
+  final TransformationController _transformationController =
+      TransformationController();
+  final CanvasController canvasController = Get.find<CanvasController>();
+
+  // Track last pointer position for manual panning
+  Offset? _lastPanPosition;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final canvasController = Get.find<CanvasController>();
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.delete ||
+              event.logicalKey == LogicalKeyboardKey.backspace) {
+            canvasController.deleteSelectedComponents();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Listener(
+        onPointerDown: (event) {
+          _focusNode.requestFocus();
+          if (event.buttons == kMiddleMouseButton) {
+            _lastPanPosition = event.localPosition;
+          } else if (event.buttons == kPrimaryButton) {
+            final scenePos = _toScene(event.localPosition);
 
-    return Container(
-      color: Colors.transparent,
-      child: Center(
-        child: Obx(() {
-          final canvasSize = canvasController.canvasSize;
-          final isDragging = canvasController.isDragging;
+            // Check if we are interacting with a component (clicking on one)
+            bool isOverComponent = false;
+            // Iterate in reverse (top-most first)
+            for (final component in canvasController.components.reversed) {
+              final width =
+                  ComponentDimensions.getWidth(component) ??
+                  component.detectedSize?.width ??
+                  100.0;
+              final height =
+                  ComponentDimensions.getHeight(component) ??
+                  component.detectedSize?.height ??
+                  100.0;
 
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: canvasSize.width + 50,
-                height: canvasSize.height,
-                child: Image.asset('assets/phone.png', fit: BoxFit.fill),
-              ),
-              Container(
-                width: canvasSize.width,
-                height: canvasSize.height - 200,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(
-                    color: isDragging
-                        ? Colors.blue.withValues(alpha: 0.5)
-                        : Colors.grey[300]!,
-                    width: isDragging ? 2.0 : 1.0,
+              // Add a small buffer for resize handles if needed, or stick to body
+              // We expand the rect by 15.0 to account for resize handles/controls that may extend outside
+              final rect = Rect.fromLTWH(
+                component.x - 15.0,
+                component.y - 15.0,
+                width + 30.0,
+                height + 30.0,
+              );
+              if (rect.contains(scenePos)) {
+                isOverComponent = true;
+                break;
+              }
+            }
+
+            // Only start box selection if clicking on empty canvas
+            if (!isOverComponent &&
+                !canvasController.isInteractingWithComponent) {
+              canvasController.startBoxSelection(scenePos);
+            }
+          }
+        },
+        onPointerMove: (event) {
+          if (event.buttons == kMiddleMouseButton) {
+            // Manual Panning
+            if (_lastPanPosition != null) {
+              final delta = event.localPosition - _lastPanPosition!;
+              final currentMatrix = _transformationController.value;
+
+              // Get the scale factor
+              final scale = currentMatrix.getMaxScaleOnAxis();
+
+              // For panning: when dragging right, content moves right
+              // The translation in the matrix needs to be updated
+              // Matrix4 stores translation in entry(0,3) for x and entry(1,3) for y
+              final currentTx = currentMatrix.entry(0, 3);
+              final currentTy = currentMatrix.entry(1, 3);
+
+              // Add delta divided by scale to the translation
+              final newMatrix = Matrix4.copy(currentMatrix)
+                ..setEntry(0, 3, currentTx + delta.dx / scale)
+                ..setEntry(1, 3, currentTy + delta.dy / scale);
+
+              _transformationController.value = newMatrix;
+              _lastPanPosition = event.localPosition;
+            }
+          } else if (event.buttons == kPrimaryButton &&
+              canvasController.isBoxSelecting) {
+            // Box Selection Update
+            final scenePos = _toScene(event.localPosition);
+            canvasController.updateBoxSelection(scenePos);
+          }
+        },
+        onPointerUp: (event) {
+          _lastPanPosition = null;
+          if (canvasController.isBoxSelecting) {
+            canvasController.endBoxSelection();
+          }
+        },
+        onPointerCancel: (event) {
+          _lastPanPosition = null;
+          if (canvasController.isBoxSelecting) {
+            canvasController.endBoxSelection();
+          }
+        },
+        child: InteractiveViewer(
+          transformationController: _transformationController,
+          boundaryMargin: const EdgeInsets.all(500),
+          minScale: 0.1,
+          maxScale: 5.0,
+          constrained: false, // Allow the phone to take its natural size
+          panEnabled: false, // DISABLE DEFAULT PAN
+          child: Center(
+            child: Obx(() {
+              final canvasSize = canvasController.canvasSize;
+              final isDragging = canvasController.isDragging;
+
+              return Stack(
+                alignment: Alignment.center,
+                clipBehavior:
+                    Clip.none, // Allow selection box to extend outside
+                children: [
+                  // Phone Background
+                  SizedBox(
+                    width: canvasSize.width + 30,
+                    height: canvasSize.height,
+                    child: Image.asset('assets/phone.png', fit: BoxFit.fill),
                   ),
-                  borderRadius: BorderRadius.circular(8.0),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 8.0,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Builder(
-                  builder: (canvasContext) => MouseRegion(
-                    cursor: canvasController.isResizingComponent
-                        ? MouseCursor
-                              .defer // Let child MouseRegions handle cursor
-                        : _getCanvasCursor(canvasController, isDragging),
-                    child: DragTarget<ComponentType>(
-                      onWillAcceptWithDetails: (details) => true,
-                      onAcceptWithDetails: (details) {
-                        final componentType = details.data;
 
-                        // Convert global position to local canvas position
-                        final RenderBox renderBox =
-                            canvasContext.findRenderObject() as RenderBox;
-                        final localPosition = renderBox.globalToLocal(
-                          details.offset,
-                        );
+                  // Canvas Area
+                  DropTarget(
+                    onDragDone: (details) async {
+                      final canvasController = Get.find<CanvasController>();
+                      final canvasSize = canvasController.canvasSize;
 
-                        // Constrain position within canvas bounds
-                        final constrainedX = localPosition.dx.clamp(
-                          0.0,
-                          canvasSize.width - 50,
-                        );
-                        final constrainedY = localPosition.dy.clamp(
-                          0.0,
-                          canvasSize.height - 50,
-                        );
+                      for (final file in details.files) {
+                        final ext = file.name.split('.').last.toLowerCase();
+                        if ([
+                          'png',
+                          'jpg',
+                          'jpeg',
+                          'webp',
+                          'gif',
+                        ].contains(ext)) {
+                          debugPrint('📥 Dropped file: ${file.name}');
 
-                        final newComponent = ComponentFactory.createComponent(
-                          componentType,
-                          constrainedX,
-                          constrainedY,
-                        );
+                          // Upload file
+                          final url = await UploadService.uploadFile(file);
 
-                        canvasController.onDragEnd(
-                          Offset(constrainedX, constrainedY),
-                          newComponent,
-                        );
-                      },
-                      builder: (context, candidateData, rejectedData) {
-                        final showDropIndicator = candidateData.isNotEmpty;
+                          if (url != null) {
+                            debugPrint('✅ File uploaded: $url');
 
-                        return Stack(
-                          children: [
-                            // Drop zone indicator
-                            if (showDropIndicator)
-                              Container(
-                                width: double.infinity,
-                                height: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withValues(alpha: 0.1),
-                                  border: Border.all(
-                                    color: Colors.blue,
-                                    width: 2.0,
-                                    style: BorderStyle.solid,
+                            // Calculate position
+                            // We are inside the Canvas Area Container, so localPosition is relative to canvas
+                            final x = details.localPosition.dx.clamp(
+                              0.0,
+                              canvasSize.width - 150,
+                            );
+                            final y = details.localPosition.dy.clamp(
+                              0.0,
+                              canvasSize.height - 150,
+                            );
+
+                            // Create component
+                            final component = ComponentFactory.createComponent(
+                              ComponentType.image,
+                              x,
+                              y,
+                            );
+
+                            // Update source URL
+                            // ComponentProperties is immutable, so we update it
+                            final updatedProperties = component.properties
+                                .updateProperty('source', url);
+
+                            final updatedComponent = component.copyWith(
+                              properties: updatedProperties,
+                            );
+
+                            // Add to canvas
+                            canvasController.addComponent(updatedComponent);
+                          }
+                        }
+                      }
+                    },
+                    child: Container(
+                      width: canvasSize.width,
+                      height:
+                          canvasSize.height -
+                          30, // Keeping original height logic
+                      margin: const EdgeInsets.only(right: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(
+                          color: isDragging
+                              ? Colors.blue.withOpacity(0.5)
+                              : Colors.grey[300]!,
+                          width: isDragging ? 2.0 : 1.0,
+                        ),
+                        borderRadius: BorderRadius.circular(35),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8.0,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(35),
+                        child: Builder(
+                          builder: (canvasContext) => MouseRegion(
+                            cursor: canvasController.isResizingComponent
+                                ? MouseCursor.defer
+                                : _getCanvasCursor(
+                                    canvasController,
+                                    isDragging,
                                   ),
-                                  borderRadius: BorderRadius.circular(8.0),
-                                ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.add_circle_outline,
-                                    size: 48,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                              ),
+                            child: DragTarget<ComponentType>(
+                              onWillAcceptWithDetails: (details) => true,
+                              onAcceptWithDetails: (details) {
+                                final componentType = details.data;
+                                final RenderBox renderBox =
+                                    canvasContext.findRenderObject()
+                                        as RenderBox;
+                                final localPosition = renderBox.globalToLocal(
+                                  details.offset,
+                                );
+                                final constrainedX = localPosition.dx.clamp(
+                                  0.0,
+                                  canvasSize.width - 50,
+                                );
+                                final constrainedY = localPosition.dy.clamp(
+                                  0.0,
+                                  canvasSize.height - 50,
+                                );
+                                final newComponent =
+                                    ComponentFactory.createComponent(
+                                      componentType,
+                                      constrainedX,
+                                      constrainedY,
+                                    );
 
-                            // Canvas boundaries indicator (subtle grid or guides)
-                            if (!showDropIndicator)
-                              _buildCanvasGuides(canvasSize),
+                                if (componentType == ComponentType.image) {
+                                  // For images, open the generator/upload dialog
+                                  Get.dialog(const ImageGeneratorDialog()).then(
+                                    (imageUrl) {
+                                      if (imageUrl != null &&
+                                          imageUrl is String) {
+                                        final updatedProperties = newComponent
+                                            .properties
+                                            .updateProperty('source', imageUrl);
+                                        final updatedComponent = newComponent
+                                            .copyWith(
+                                              properties: updatedProperties,
+                                            );
+                                        canvasController.onDragEnd(
+                                          Offset(constrainedX, constrainedY),
+                                          updatedComponent,
+                                        );
+                                      } else {
+                                        // User cancelled or failed
+                                        canvasController.onDragEnd(
+                                          Offset.zero,
+                                          null,
+                                        );
+                                      }
+                                    },
+                                  );
+                                } else {
+                                  canvasController.onDragEnd(
+                                    Offset(constrainedX, constrainedY),
+                                    newComponent,
+                                  );
+                                }
+                              },
+                              builder: (context, candidateData, rejectedData) {
+                                final showDropIndicator =
+                                    candidateData.isNotEmpty;
 
-                            // Render existing components (visual only, no interactions)
-                            ...canvasController.components.map((component) {
-                              return _buildVisualComponentWidget(component);
-                            }),
+                                return Stack(
+                                  children: [
+                                    // Drop zone indicator
+                                    if (showDropIndicator)
+                                      Container(
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withOpacity(0.1),
+                                          border: Border.all(
+                                            color: Colors.blue,
+                                            width: 2.0,
+                                            style: BorderStyle.solid,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8.0,
+                                          ),
+                                        ),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.add_circle_outline,
+                                            size: 48,
+                                            color: Colors.blue,
+                                          ),
+                                        ),
+                                      ),
 
-                            // Overlay layer for all interactions (dragging, resizing, selection)
-                            // IMPORTANT: This must be LAST (on top) to capture gestures
-                            ComponentOverlayLayer(canvasSize: canvasSize),
-                          ],
-                        );
-                      },
+                                    // Canvas boundaries indicator (subtle grid or guides)
+                                    if (!showDropIndicator)
+                                      _buildCanvasGuides(canvasSize),
+
+                                    // Render existing components (visual only, no interactions)
+                                    ...canvasController.components.map((
+                                      component,
+                                    ) {
+                                      return _buildVisualComponentWidget(
+                                        component,
+                                      );
+                                    }),
+
+                                    // Overlay layer for all interactions (dragging, resizing, selection)
+                                    ComponentOverlayLayer(
+                                      canvasSize: canvasSize,
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ],
-          );
-        }),
+
+                  // BOX SELECTION OVERLAY (Figma-style) - Outside clipped area so it's always visible
+                  if (canvasController.isBoxSelecting &&
+                      canvasController.boxSelectionRect != null)
+                    BoxSelectionOverlay(
+                      rect: canvasController.boxSelectionRect!,
+                    ),
+                  Positioned(
+                    top: 25,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(
+                        color: Colors.black,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+        ),
       ),
     );
   }
 
-  /// Build visual-only component widget (no interactions)
+  Offset _toScene(Offset globalPos) {
+    // Convert generic global position to the scene coordinates.
+    // .toScene() accounts for the InteractiveViewer transformation.
+    return _transformationController.toScene(globalPos);
+  }
+
   Widget _buildVisualComponentWidget(ComponentModel component) {
-    // Get dimensions or null if properties are disabled
     final width = ComponentDimensions.getWidth(component);
     final height = ComponentDimensions.getHeight(component);
+    final canvasController = Get.find<CanvasController>();
 
     return Positioned(
       left: component.x,
       top: component.y,
       child: MeasuredWidget(
         componentId: component.id,
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: _renderComponent(component),
-        ),
+        child: Obx(() {
+          final interaction = canvasController.getInteractionState(
+            component.id,
+          );
+
+          double dx = 0;
+          double dy = 0;
+          double currentWidth = width ?? 0.0;
+          double currentHeight = height ?? 0.0;
+
+          if (interaction != null) {
+            if (interaction.position != null) {
+              dx = interaction.position!.dx - component.x;
+              dy = interaction.position!.dy - component.y;
+            }
+            if (interaction.size != null) {
+              currentWidth = interaction.size!.width;
+              currentHeight = interaction.size!.height;
+            }
+          }
+
+          Widget childWidget = _renderComponent(component);
+
+          if (currentWidth > 0 || currentHeight > 0) {
+            childWidget = SizedBox(
+              width: currentWidth > 0 ? currentWidth : null,
+              height: currentHeight > 0 ? currentHeight : null,
+              child: childWidget,
+            );
+          }
+
+          return Transform.translate(
+            offset: Offset(dx, dy),
+            child: childWidget,
+          );
+        }),
       ),
     );
   }
@@ -170,17 +453,7 @@ class DesignCanvas extends StatelessWidget {
     return Builder(
       builder: (BuildContext context) {
         try {
-          // For text components, use a direct Flutter Text widget as fallback
-          // if (component.type == ComponentType.text) {
-          //   return _renderTextComponentDirect(component);
-          // }
-
-          // Use json_dynamic_widget to render from the component's jsonSchema
           final jsonSchema = component.jsonSchema;
-
-          debugPrint(
-            '🎨 ${component.type.name.toUpperCase()} COMPONENT JSON SCHEMA: $jsonSchema',
-          );
 
           // Create a JsonWidgetData from the schema
           final widgetData = JsonWidgetData.fromDynamic(
@@ -196,7 +469,6 @@ class DesignCanvas extends StatelessWidget {
 
           return widget;
         } catch (e) {
-          // Error handling - show fallback widget with error indication
           debugPrint('❌ ERROR rendering ${component.type.name} component: $e');
           return _buildErrorWidget(component, e.toString());
         }
@@ -204,65 +476,12 @@ class DesignCanvas extends StatelessWidget {
     );
   }
 
-  /// Direct Flutter Text widget rendering for text components
-  Widget _renderTextComponentDirect(ComponentModel component) {
-    final content =
-        component.properties.getProperty<String>('content') ?? 'Sample Text';
-    final fontSize =
-        component.properties.getProperty<double>('fontSize') ?? 16.0;
-    final color =
-        component.properties.getProperty<XDColor>('color')?.toColor() ??
-        Colors.black;
-    final alignment =
-        component.properties.getProperty<TextAlign>('alignment') ??
-        TextAlign.left;
-    final fontWeight =
-        component.properties.getProperty<FontWeight>('fontWeight') ??
-        FontWeight.normal;
-    final fontFamily =
-        component.properties.getProperty<String>('fontFamily') ?? 'Roboto';
-
-    return Container(
-      width: ComponentDimensions.getWidth(component),
-      height: ComponentDimensions.getHeight(component),
-      alignment: _getAlignmentFromTextAlign(alignment),
-      child: Text(
-        content,
-        style: TextStyle(
-          fontSize: fontSize,
-          color: color,
-          fontWeight: fontWeight,
-          fontFamily: fontFamily,
-        ),
-        textAlign: alignment,
-        overflow: TextOverflow.ellipsis,
-        maxLines: 2,
-      ),
-    );
-  }
-
-  /// Convert TextAlign to Alignment for Container
-  Alignment _getAlignmentFromTextAlign(TextAlign textAlign) {
-    switch (textAlign) {
-      case TextAlign.left:
-      case TextAlign.start:
-        return Alignment.centerLeft;
-      case TextAlign.right:
-      case TextAlign.end:
-        return Alignment.centerRight;
-      case TextAlign.center:
-        return Alignment.center;
-      case TextAlign.justify:
-        return Alignment.centerLeft;
-    }
-  }
-
   Widget _buildErrorWidget(ComponentModel component, String error) {
     return Container(
       width: 100,
       height: 100,
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.1),
+        color: Colors.red.withOpacity(0.1),
         border: Border.all(color: Colors.red, width: 2.0),
         borderRadius: BorderRadius.circular(8.0),
       ),
@@ -297,9 +516,7 @@ class DesignCanvas extends StatelessWidget {
     } else if (controller.isResizingComponent) {
       return ComponentOverlayManager.getCursor(controller.resizeHandle);
     } else if (isDragging) {
-      return ComponentOverlayManager.getCursor(
-        'copy',
-      ); // When dragging from component panel
+      return ComponentOverlayManager.getCursor('copy');
     } else {
       return ComponentOverlayManager.getCursor('basic');
     }
@@ -360,7 +577,7 @@ class CanvasGuidesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.grey.withValues(alpha: 0.1)
+      ..color = Colors.grey.withOpacity(0.1)
       ..strokeWidth = 0.5;
 
     // Draw subtle grid lines every 50 pixels
@@ -374,7 +591,7 @@ class CanvasGuidesPainter extends CustomPainter {
 
     // Draw center lines
     final centerPaint = Paint()
-      ..color = Colors.grey.withValues(alpha: 0.2)
+      ..color = Colors.grey.withOpacity(0.2)
       ..strokeWidth = 1.0;
 
     // Vertical center line

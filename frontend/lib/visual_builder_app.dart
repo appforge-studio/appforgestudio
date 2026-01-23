@@ -14,6 +14,7 @@ class VisualBuilderApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Visual Builder',
       theme: ThemeData(
         textTheme: GoogleFonts.notoSansTextTheme(

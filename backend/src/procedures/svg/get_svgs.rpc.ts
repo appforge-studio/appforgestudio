@@ -8,7 +8,7 @@ export default defineRpc({
     params: a.object("GetSvgsParams", {
         limit: a.int32(),
         offset: a.int32(),
-        search: a.nullable(a.string()),
+        search: a.string(),
     }),
     response: a.object("GetSvgsResponse", {
         success: a.boolean(),

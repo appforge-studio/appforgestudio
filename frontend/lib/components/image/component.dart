@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/component_model.dart';
 import '../../models/component_properties.dart';
+import '../../bindings/app_bindings.dart';
 import '../component_factory.dart';
 import '../component_properties_factory.dart';
 
@@ -12,17 +13,23 @@ class ImageComponent extends ComponentModel {
     ComponentProperties? properties,
     super.resizable = true, // Images are typically resizable
   }) : super(
-          type: ComponentType.image,
-          properties: properties ?? ComponentPropertiesFactory.getDefaultProperties(ComponentType.image),
-        );
-  
+         type: ComponentType.image,
+         properties:
+             properties ??
+             ComponentPropertiesFactory.getDefaultProperties(
+               ComponentType.image,
+             ),
+       );
+
   @override
   Map<String, dynamic> get jsonSchema {
-    final source = properties.getProperty<String>('source') ?? 'https://via.placeholder.com/150';
+    final source =
+        properties.getProperty<String>('source') ??
+        'https://via.placeholder.com/150';
     final width = properties.getProperty<double>('width') ?? 150.0;
     final height = properties.getProperty<double>('height') ?? 150.0;
     final fit = properties.getProperty<BoxFit>('fit') ?? BoxFit.cover;
-    
+
     // Convert BoxFit enum to string
     String boxFitString = switch (fit) {
       BoxFit.fill => 'fill',
@@ -33,19 +40,19 @@ class ImageComponent extends ComponentModel {
       BoxFit.none => 'none',
       BoxFit.scaleDown => 'scaleDown',
     };
-    
+
     // Pure visual component - no interactions (handled by overlay layer)
     return {
       'type': 'image',
       'args': {
-        'image': source,
+        'image': AppBindings.getAssetUrl(source),
         'width': width,
         'height': height,
         'fit': boxFitString,
       },
     };
   }
-  
+
   @override
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -55,9 +62,14 @@ class ImageComponent extends ComponentModel {
     'properties': properties.toJson(),
     'resizable': resizable,
   };
-  
+
   @override
-  ImageComponent copyWith({double? x, double? y, ComponentProperties? properties, bool? resizable}) {
+  ImageComponent copyWith({
+    double? x,
+    double? y,
+    ComponentProperties? properties,
+    bool? resizable,
+  }) {
     return ImageComponent(
       id: id,
       x: x ?? this.x,
@@ -66,11 +78,13 @@ class ImageComponent extends ComponentModel {
       resizable: resizable ?? this.resizable,
     );
   }
-  
+
   factory ImageComponent.fromJson(Map<String, dynamic> json) {
-    final defaultProperties = ComponentPropertiesFactory.getDefaultProperties(ComponentType.image);
+    final defaultProperties = ComponentPropertiesFactory.getDefaultProperties(
+      ComponentType.image,
+    );
     final properties = defaultProperties.fromJson(json['properties'] ?? {});
-    
+
     return ImageComponent(
       id: json['id'],
       x: (json['x'] as num).toDouble(),

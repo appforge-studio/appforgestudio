@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:json_dynamic_widget/json_dynamic_widget.dart';
 import 'visual_builder_app.dart';
 import 'widgets/json_builders/json_svg_builder.dart';
+import 'widgets/json_builders/json_image_builder.dart';
+import 'widgets/json_builders/json_backdrop_filter_builder.dart';
+import 'widgets/json_builders/json_google_text_builder.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +26,25 @@ void main() async {
     JsonSvgSchema.id,
     JsonWidgetBuilderContainer(
       builder: (args, {registry}) => JsonSvgBuilder(args: args),
+    ),
+  );
+  registry.registerCustomBuilder(
+    JsonImageSchema.id,
+    JsonWidgetBuilderContainer(
+      builder: (args, {registry}) => JsonImageBuilder(args: args),
+    ),
+  );
+  registry.registerCustomBuilder(
+    JsonBackdropFilterSchema.id,
+    JsonWidgetBuilderContainer(
+      builder: (args, {registry}) => JsonBackdropFilterBuilder(args: args),
+    ),
+  );
+
+  registry.registerCustomBuilder(
+    'text',
+    JsonWidgetBuilderContainer(
+      builder: (args, {registry}) => JsonGoogleTextBuilder(args: args),
     ),
   );
 

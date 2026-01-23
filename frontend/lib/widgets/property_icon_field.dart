@@ -15,21 +15,25 @@ class PropertyIconField extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.showLabel = true,
   });
+
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 80,
-          child: Text(
-            "$label:",
-            style: TextStyle(fontSize: 13, color: Pallet.font1),
+        if (showLabel)
+          SizedBox(
+            width: 80,
+            child: Text(
+              "$label:",
+              style: TextStyle(fontSize: 13, color: Pallet.font1),
+            ),
           ),
-        ),
-        const SizedBox(width: 5),
+        if (showLabel) const SizedBox(width: 5),
         Expanded(
           child: InkWell(
             onTap: () {
