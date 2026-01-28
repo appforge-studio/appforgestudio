@@ -93,9 +93,9 @@ void main() {
       // Test with border enabled
       final borderedContainer = container.copyWith(
         properties: container.properties
-            .updatePropertyEnabled('borderColor', true)
+            .updatePropertyEnabled('border', true)
             .updateProperty('borderWidth', 2.0)
-            .updateProperty('borderColor', XDColor(['#FF0000'])),
+            .updateProperty('border', XDColor(['#FF0000'])),
       );
       final borderedSchema = ComponentFactory.toJsonSchema(borderedContainer);
       expect(
@@ -110,6 +110,18 @@ void main() {
         borderedSchema['args']['decoration']['border']['color'],
         equals('#FFFF0000'),
       );
+
+      // Test image with borderRadius
+      final roundedImage = image.copyWith(
+        properties: image.properties.updateProperty('borderRadius', 15.0),
+      );
+      final roundedImageSchema = ComponentFactory.toJsonSchema(roundedImage);
+      expect(roundedImageSchema['type'], equals('clip_rrect'));
+      expect(
+        roundedImageSchema['args']['borderRadius']['radius'],
+        equals(15.0),
+      );
+      expect(roundedImageSchema['args']['child']['type'], equals('image'));
     });
   });
 

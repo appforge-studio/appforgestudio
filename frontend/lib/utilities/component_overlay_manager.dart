@@ -123,18 +123,18 @@ class ComponentOverlayManager {
                     height: componentHeight,
                   ),
 
-                // Resize handles (visible when selected)
-                if (isSelected && component.resizable && !isDragging)
-                  ..._buildResizeHandles(
+                // Edge detection zones (invisible, for cursor feedback) - Must persist during resize!
+                if (component.resizable && !isDragging)
+                  ..._buildEdgeDetectionZones(
                     component: component,
                     controller: controller,
                     width: componentWidth,
                     height: componentHeight,
                   ),
 
-                // Edge detection zones (invisible, for cursor feedback)
-                if (component.resizable && !isDragging && !isResizing)
-                  ..._buildEdgeDetectionZones(
+                // Resize handles (visible when selected) - Draw on top!
+                if (isSelected && component.resizable && !isDragging)
+                  ..._buildResizeHandles(
                     component: component,
                     controller: controller,
                     width: componentWidth,
@@ -276,6 +276,7 @@ class ComponentOverlayManager {
         -handleSize / 2,
         controller,
         component.id,
+        const ValueKey('handle_nw'),
       ),
       _buildResizeHandle(
         'ne',
@@ -283,6 +284,7 @@ class ComponentOverlayManager {
         -handleSize / 2,
         controller,
         component.id,
+        const ValueKey('handle_ne'),
       ),
       _buildResizeHandle(
         'sw',
@@ -290,6 +292,7 @@ class ComponentOverlayManager {
         height - handleSize / 2,
         controller,
         component.id,
+        const ValueKey('handle_sw'),
       ),
       _buildResizeHandle(
         'se',
@@ -297,6 +300,7 @@ class ComponentOverlayManager {
         height - handleSize / 2,
         controller,
         component.id,
+        const ValueKey('handle_se'),
       ),
     ];
   }
@@ -356,6 +360,7 @@ class ComponentOverlayManager {
     double top,
     CanvasController controller,
     String componentId,
+    Key key,
   ) {
     final isActiveHandle =
         controller.isResizingComponent &&
@@ -363,36 +368,29 @@ class ComponentOverlayManager {
         controller.resizeHandle == handle;
 
     return Positioned(
+      key: key,
       left: left,
       top: top,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onPanStart: (details) =>
             _handleResizeStart(controller, componentId, handle),
         onPanUpdate: (details) =>
             _handleResizeUpdate(controller, componentId, details),
         onPanEnd: (details) => _handleResizeEnd(controller, componentId),
+        onPanCancel: () {
+          debugPrint('Resize gesture canceled for $handle');
+          _handleResizeEnd(controller, componentId);
+        },
         child: MouseRegion(
           cursor: getCursor(handle),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: isActiveHandle ? handleSize * 1.2 : handleSize,
-            height: isActiveHandle ? handleSize * 1.2 : handleSize,
+          child: Container(
+            width: handleSize,
+            height: handleSize,
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border.all(
-                color: Colors.blue,
-                width: isActiveHandle ? 1.5 : 1.0,
-              ),
+              border: Border.all(color: Colors.blue, width: 1.0),
               borderRadius: BorderRadius.circular(handleSize / 2),
-              boxShadow: [
-                // BoxShadow(
-                //   color: Colors.black.withValues(
-                //     alpha: isActiveHandle ? 0.3 : 0.2,
-                //   ),
-                //   blurRadius: isActiveHandle ? 4.0 : 2.0,
-                //   offset: Offset(0, isActiveHandle ? 2 : 1),
-                // ),
-              ],
             ),
           ),
         ),
@@ -545,128 +543,13 @@ class ComponentOverlayManager {
   ) {
     if (controller.isResizingComponent &&
         controller.resizingComponentId == componentId) {
-      final component = controller.getComponentById(componentId);
-      if (component == null) return;
-
-      // Check interaction state, fallback to component
-      final interaction = controller.getInteractionState(componentId);
-      // Logic from reuse resizeComponent but optimized for transient updates...
-      // Since resize logic is complex and inside controller, we should duplicate logic here
-      // OR refactor controller.resizeComponent to support transient mode.
-      // For now, let's call a new method on controller: resizeComponentTransient
-      // But wait, I didn't add that.
-      // Let's implement the logic briefly here or assume we call the param update
-
       // Calculate delta
       final dx = details.delta.dx;
       final dy = details.delta.dy;
 
-      _handleTransientResize(
-        controller,
-        component,
-        dx,
-        dy,
-        controller.resizeHandle,
-      );
+      // Use the new centralized method in controller
+      controller.resizeComponentTransient(componentId, dx, dy);
     }
-  }
-
-  static void _handleTransientResize(
-    CanvasController controller,
-    ComponentModel component,
-    double deltaX,
-    double deltaY,
-    String handle,
-  ) {
-    final interaction = controller.getInteractionState(component.id);
-    final currentWidth =
-        interaction?.size?.width ??
-        ComponentDimensions.getWidth(component) ??
-        100.0;
-    final currentHeight =
-        interaction?.size?.height ??
-        ComponentDimensions.getHeight(component) ??
-        100.0;
-    final currentX = interaction?.position?.dx ?? component.x;
-    final currentY = interaction?.position?.dy ?? component.y;
-
-    double newWidth = currentWidth;
-    double newHeight = currentHeight;
-    double newX = currentX;
-    double newY = currentY;
-
-    final canvasSize = controller.canvasSize;
-
-    // .... Copy paste case swtich logic from controller but using local variables
-    switch (handle) {
-      case 'se': // Southeast - resize width and height
-        newWidth = (currentWidth + deltaX).clamp(
-          20.0,
-          canvasSize.width - currentX,
-        );
-        newHeight = (currentHeight + deltaY).clamp(
-          20.0,
-          canvasSize.height - currentY,
-        );
-        break;
-      case 'sw': // Southwest - resize width (left) and height
-        newWidth = (currentWidth - deltaX).clamp(20.0, currentX + currentWidth);
-        newHeight = (currentHeight + deltaY).clamp(
-          20.0,
-          canvasSize.height - currentY,
-        );
-        newX = currentX + (currentWidth - newWidth);
-        break;
-      case 'ne': // Northeast - resize width and height (top)
-        newWidth = (currentWidth + deltaX).clamp(
-          20.0,
-          canvasSize.width - currentX,
-        );
-        newHeight = (currentHeight - deltaY).clamp(
-          20.0,
-          currentY + currentHeight,
-        );
-        newY = currentY + (currentHeight - newHeight);
-        break;
-      case 'nw': // Northwest - resize width (left) and height (top)
-        newWidth = (currentWidth - deltaX).clamp(20.0, currentX + currentWidth);
-        newHeight = (currentHeight - deltaY).clamp(
-          20.0,
-          currentY + currentHeight,
-        );
-        newX = currentX + (currentWidth - newWidth);
-        newY = currentY + (currentHeight - newHeight);
-        break;
-      case 'e': // East - resize width only
-        newWidth = (currentWidth + deltaX).clamp(
-          20.0,
-          canvasSize.width - currentX,
-        );
-        break;
-      case 'w': // West - resize width (left) only
-        newWidth = (currentWidth - deltaX).clamp(20.0, currentX + currentWidth);
-        newX = currentX + (currentWidth - newWidth);
-        break;
-      case 'n': // North - resize height (top) only
-        newHeight = (currentHeight - deltaY).clamp(
-          20.0,
-          currentY + currentHeight,
-        );
-        newY = currentY + (currentHeight - newHeight);
-        break;
-      case 's': // South - resize height only
-        newHeight = (currentHeight + deltaY).clamp(
-          20.0,
-          canvasSize.height - currentY,
-        );
-        break;
-    }
-
-    controller.updateInteraction(
-      component.id,
-      position: Offset(newX, newY),
-      size: Size(newWidth, newHeight),
-    );
   }
 
   static void _handleResizeEnd(

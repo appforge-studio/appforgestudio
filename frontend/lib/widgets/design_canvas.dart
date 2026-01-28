@@ -8,6 +8,9 @@ import '../models/component_model.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 
 import '../services/upload_service.dart';
+import '../services/socket_service.dart';
+import '../services/arri_client.rpc.dart';
+import '../bindings/app_bindings.dart';
 import '../components/component_factory.dart';
 import '../utilities/component_dimensions.dart';
 import 'component_overlay_layer.dart';
@@ -30,6 +33,7 @@ class _DesignCanvasState extends State<DesignCanvas> {
   // Track last pointer position for manual panning
   Offset? _lastPanPosition;
   final FocusNode _focusNode = FocusNode();
+  bool _isCentered = false;
 
   @override
   void dispose() {
@@ -138,256 +142,489 @@ class _DesignCanvasState extends State<DesignCanvas> {
             canvasController.endBoxSelection();
           }
         },
-        child: InteractiveViewer(
-          transformationController: _transformationController,
-          boundaryMargin: const EdgeInsets.all(500),
-          minScale: 0.1,
-          maxScale: 5.0,
-          constrained: false, // Allow the phone to take its natural size
-          panEnabled: false, // DISABLE DEFAULT PAN
-          child: Center(
-            child: Obx(() {
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (!_isCentered &&
+                constraints.maxWidth > 0 &&
+                constraints.maxHeight > 0) {
+              // Get canvas size
               final canvasSize = canvasController.canvasSize;
-              final isDragging = canvasController.isDragging;
+              final contentWidth = canvasSize.width + 30; // Phone width
+              final contentHeight = canvasSize.height; // Phone height
 
-              return Stack(
-                alignment: Alignment.center,
-                clipBehavior:
-                    Clip.none, // Allow selection box to extend outside
-                children: [
-                  // Phone Background
-                  SizedBox(
-                    width: canvasSize.width + 30,
-                    height: canvasSize.height,
-                    child: Image.asset('assets/phone.png', fit: BoxFit.fill),
-                  ),
+              // Calculate scale to fit 85% of height
+              final scale = (constraints.maxHeight * 0.85) / contentHeight;
 
-                  // Canvas Area
-                  DropTarget(
-                    onDragDone: (details) async {
-                      final canvasController = Get.find<CanvasController>();
-                      final canvasSize = canvasController.canvasSize;
+              // Calculate center position for scaled content
+              final dx = (constraints.maxWidth - (contentWidth * scale)) / 2;
+              final dy = (constraints.maxHeight - (contentHeight * scale)) / 2;
 
-                      for (final file in details.files) {
-                        final ext = file.name.split('.').last.toLowerCase();
-                        if ([
-                          'png',
-                          'jpg',
-                          'jpeg',
-                          'webp',
-                          'gif',
-                        ].contains(ext)) {
-                          debugPrint('📥 Dropped file: ${file.name}');
+              // Apply translation directly to the matrix
+              // Use runAsync to avoid modifying state during build if strictly necessary,
+              // but setting value on TransformationController is usually safe in build phase for initial check.
+              // However, to be safe and avoid "setState during build" errors if it triggers listeners:
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!_isCentered) {
+                  _transformationController.value = Matrix4.identity()
+                    ..translate(dx, dy)
+                    ..scale(scale);
+                  _isCentered = true;
+                }
+              });
+            }
 
-                          // Upload file
-                          final url = await UploadService.uploadFile(file);
+            return InteractiveViewer(
+              transformationController: _transformationController,
+              boundaryMargin: const EdgeInsets.all(500),
+              minScale: 0.1,
+              maxScale: 5.0,
+              constrained: false, // Allow the phone to take its natural size
+              panEnabled: false, // DISABLE DEFAULT PAN
+              child: Center(
+                child: Obx(() {
+                  final canvasSize = canvasController.canvasSize;
+                  final isDragging = canvasController.isDragging;
 
-                          if (url != null) {
-                            debugPrint('✅ File uploaded: $url');
-
-                            // Calculate position
-                            // We are inside the Canvas Area Container, so localPosition is relative to canvas
-                            final x = details.localPosition.dx.clamp(
-                              0.0,
-                              canvasSize.width - 150,
-                            );
-                            final y = details.localPosition.dy.clamp(
-                              0.0,
-                              canvasSize.height - 150,
-                            );
-
-                            // Create component
-                            final component = ComponentFactory.createComponent(
-                              ComponentType.image,
-                              x,
-                              y,
-                            );
-
-                            // Update source URL
-                            // ComponentProperties is immutable, so we update it
-                            final updatedProperties = component.properties
-                                .updateProperty('source', url);
-
-                            final updatedComponent = component.copyWith(
-                              properties: updatedProperties,
-                            );
-
-                            // Add to canvas
-                            canvasController.addComponent(updatedComponent);
-                          }
-                        }
-                      }
-                    },
-                    child: Container(
-                      width: canvasSize.width,
-                      height:
-                          canvasSize.height -
-                          30, // Keeping original height logic
-                      margin: const EdgeInsets.only(right: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(
-                          color: isDragging
-                              ? Colors.blue.withOpacity(0.5)
-                              : Colors.grey[300]!,
-                          width: isDragging ? 2.0 : 1.0,
+                  return Stack(
+                    alignment: Alignment.center,
+                    clipBehavior:
+                        Clip.none, // Allow selection box to extend outside
+                    children: [
+                      // Phone Background
+                      SizedBox(
+                        width: canvasSize.width + 30,
+                        height: canvasSize.height,
+                        child: Image.asset(
+                          'assets/phone.png',
+                          fit: BoxFit.fill,
                         ),
-                        borderRadius: BorderRadius.circular(35),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8.0,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(35),
-                        child: Builder(
-                          builder: (canvasContext) => MouseRegion(
-                            cursor: canvasController.isResizingComponent
-                                ? MouseCursor.defer
-                                : _getCanvasCursor(
-                                    canvasController,
-                                    isDragging,
-                                  ),
-                            child: DragTarget<ComponentType>(
-                              onWillAcceptWithDetails: (details) => true,
-                              onAcceptWithDetails: (details) {
-                                final componentType = details.data;
-                                final RenderBox renderBox =
-                                    canvasContext.findRenderObject()
-                                        as RenderBox;
-                                final localPosition = renderBox.globalToLocal(
-                                  details.offset,
-                                );
-                                final constrainedX = localPosition.dx.clamp(
+
+                      // Canvas Area
+                      DropTarget(
+                        onDragDone: (details) async {
+                          final canvasController = Get.find<CanvasController>();
+                          final canvasSize = canvasController.canvasSize;
+
+                          for (final file in details.files) {
+                            final ext = file.name.split('.').last.toLowerCase();
+                            if ([
+                              'png',
+                              'jpg',
+                              'jpeg',
+                              'webp',
+                              'gif',
+                            ].contains(ext)) {
+                              debugPrint('📥 Dropped file: ${file.name}');
+
+                              // Upload file
+                              final url = await UploadService.uploadFile(file);
+
+                              if (url != null) {
+                                debugPrint('✅ File uploaded: $url');
+
+                                // Calculate position
+                                // We are inside the Canvas Area Container, so localPosition is relative to canvas
+                                final x = details.localPosition.dx.clamp(
                                   0.0,
-                                  canvasSize.width - 50,
+                                  canvasSize.width - 150,
                                 );
-                                final constrainedY = localPosition.dy.clamp(
+                                final y = details.localPosition.dy.clamp(
                                   0.0,
-                                  canvasSize.height - 50,
+                                  canvasSize.height - 150,
                                 );
-                                final newComponent =
+
+                                // Create component
+                                final component =
                                     ComponentFactory.createComponent(
-                                      componentType,
-                                      constrainedX,
-                                      constrainedY,
+                                      ComponentType.image,
+                                      x,
+                                      y,
                                     );
 
-                                if (componentType == ComponentType.image) {
-                                  // For images, open the generator/upload dialog
-                                  Get.dialog(const ImageGeneratorDialog()).then(
-                                    (imageUrl) {
-                                      if (imageUrl != null &&
-                                          imageUrl is String) {
-                                        final updatedProperties = newComponent
-                                            .properties
-                                            .updateProperty('source', imageUrl);
-                                        final updatedComponent = newComponent
-                                            .copyWith(
-                                              properties: updatedProperties,
-                                            );
-                                        canvasController.onDragEnd(
-                                          Offset(constrainedX, constrainedY),
-                                          updatedComponent,
-                                        );
-                                      } else {
-                                        // User cancelled or failed
-                                        canvasController.onDragEnd(
-                                          Offset.zero,
-                                          null,
-                                        );
-                                      }
-                                    },
-                                  );
-                                } else {
-                                  canvasController.onDragEnd(
-                                    Offset(constrainedX, constrainedY),
-                                    newComponent,
-                                  );
-                                }
-                              },
-                              builder: (context, candidateData, rejectedData) {
-                                final showDropIndicator =
-                                    candidateData.isNotEmpty;
+                                // Update source URL
+                                // ComponentProperties is immutable, so we update it
+                                final updatedProperties = component.properties
+                                    .updateProperty('source', url);
 
-                                return Stack(
-                                  children: [
-                                    // Drop zone indicator
-                                    if (showDropIndicator)
-                                      Container(
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue.withOpacity(0.1),
-                                          border: Border.all(
-                                            color: Colors.blue,
-                                            width: 2.0,
-                                            style: BorderStyle.solid,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            8.0,
-                                          ),
-                                        ),
-                                        child: const Center(
-                                          child: Icon(
-                                            Icons.add_circle_outline,
-                                            size: 48,
-                                            color: Colors.blue,
-                                          ),
-                                        ),
-                                      ),
-
-                                    // Canvas boundaries indicator (subtle grid or guides)
-                                    if (!showDropIndicator)
-                                      _buildCanvasGuides(canvasSize),
-
-                                    // Render existing components (visual only, no interactions)
-                                    ...canvasController.components.map((
-                                      component,
-                                    ) {
-                                      return _buildVisualComponentWidget(
-                                        component,
-                                      );
-                                    }),
-
-                                    // Overlay layer for all interactions (dragging, resizing, selection)
-                                    ComponentOverlayLayer(
-                                      canvasSize: canvasSize,
-                                    ),
-                                  ],
+                                final updatedComponent = component.copyWith(
+                                  properties: updatedProperties,
                                 );
-                              },
+
+                                // Add to canvas
+                                canvasController.addComponent(updatedComponent);
+                              }
+                            }
+                          }
+                        },
+                        child: Container(
+                          width: canvasSize.width,
+                          height:
+                              canvasSize.height -
+                              30, // Keeping original height logic
+                          margin: const EdgeInsets.only(right: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(
+                              color: isDragging
+                                  ? Colors.blue.withOpacity(0.5)
+                                  : Colors.grey[300]!,
+                              width: isDragging ? 2.0 : 1.0,
+                            ),
+                            borderRadius: BorderRadius.circular(35),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8.0,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(35),
+                            child: Builder(
+                              builder: (canvasContext) => MouseRegion(
+                                cursor: canvasController.isResizingComponent
+                                    ? MouseCursor.defer
+                                    : _getCanvasCursor(
+                                        canvasController,
+                                        isDragging,
+                                      ),
+                                child: DragTarget<ComponentType>(
+                                  onWillAcceptWithDetails: (details) => true,
+                                  onAcceptWithDetails: (details) {
+                                    final componentType = details.data;
+                                    final RenderBox renderBox =
+                                        canvasContext.findRenderObject()
+                                            as RenderBox;
+                                    final localPosition = renderBox
+                                        .globalToLocal(details.offset);
+                                    final constrainedX = localPosition.dx.clamp(
+                                      0.0,
+                                      canvasSize.width - 50,
+                                    );
+                                    final constrainedY = localPosition.dy.clamp(
+                                      0.0,
+                                      canvasSize.height - 50,
+                                    );
+                                    final newComponent =
+                                        ComponentFactory.createComponent(
+                                          componentType,
+                                          constrainedX,
+                                          constrainedY,
+                                        );
+
+                                    if (componentType == ComponentType.image) {
+                                      // For images, open the generator/upload dialog
+                                      Get.dialog(
+                                        const ImageGeneratorDialog(),
+                                      ).then((result) async {
+                                        if (result != null && result is Map) {
+                                          if (result['action'] == 'generate') {
+                                            final prompt =
+                                                result['prompt'] as String;
+                                            final steps =
+                                                result['steps'] as double;
+                                            final width =
+                                                result['width'] as double;
+                                            final height =
+                                                result['height'] as double;
+
+                                            // Create and add the component immediately
+                                            var updatedProperties = newComponent
+                                                .properties
+                                                .updateProperty(
+                                                  'width',
+                                                  width > 300 ? 300.0 : width,
+                                                )
+                                                .updateProperty(
+                                                  'height',
+                                                  height > 300 ? 300.0 : height,
+                                                );
+
+                                            var generatedComponent =
+                                                newComponent.copyWith(
+                                                  properties: updatedProperties,
+                                                );
+
+                                            canvasController.onDragEnd(
+                                              Offset(
+                                                constrainedX,
+                                                constrainedY,
+                                              ),
+                                              generatedComponent,
+                                            );
+
+                                            // Handle generation and previews
+                                            try {
+                                              final client =
+                                                  Get.find<ArriClient>();
+                                              final socketService =
+                                                  Get.find<SocketService>();
+
+                                              // Listen for previews
+                                              void onPreview(dynamic data) {
+                                                debugPrint(
+                                                  '🎨 [Canvas] Received preview event: ${data.keys}',
+                                                );
+                                                if (data != null &&
+                                                    data['image'] != null) {
+                                                  final previewBase64 =
+                                                      data['image'] as String;
+                                                  debugPrint(
+                                                    '🎨 [Canvas] Preview data length: ${previewBase64.length}',
+                                                  );
+
+                                                  // Update component source with preview
+                                                  final currentComponent =
+                                                      canvasController
+                                                          .getComponentById(
+                                                            generatedComponent
+                                                                .id,
+                                                          );
+                                                  if (currentComponent !=
+                                                      null) {
+                                                    debugPrint(
+                                                      '🎨 [Canvas] Updating component ${currentComponent.id} with preview',
+                                                    );
+                                                    final updatedProps =
+                                                        currentComponent
+                                                            .properties
+                                                            .updateProperty(
+                                                              'source',
+                                                              previewBase64,
+                                                            );
+                                                    canvasController
+                                                        .updateComponent(
+                                                          currentComponent
+                                                              .copyWith(
+                                                                properties:
+                                                                    updatedProps,
+                                                              ),
+                                                        );
+                                                  } else {
+                                                    debugPrint(
+                                                      '⚠️ [Canvas] Component ${generatedComponent.id} not found!',
+                                                    );
+                                                  }
+                                                }
+                                              }
+
+                                              socketService.on(
+                                                'preview',
+                                                onPreview,
+                                              );
+
+                                              final genResult = await client.ai
+                                                  .generate_image(
+                                                    GenerateImageParams(
+                                                      prompt: prompt,
+                                                      steps: steps,
+                                                      width: width,
+                                                      height: height,
+                                                      socketId: socketService
+                                                          .socketId,
+                                                    ),
+                                                  );
+
+                                              socketService.off(
+                                                'preview',
+                                                onPreview,
+                                              );
+
+                                              if (genResult.success &&
+                                                  genResult.url != null) {
+                                                final fullUrl =
+                                                    AppBindings.getAssetUrl(
+                                                      genResult.url!,
+                                                    );
+                                                final currentComponent =
+                                                    canvasController
+                                                        .getComponentById(
+                                                          generatedComponent.id,
+                                                        );
+                                                if (currentComponent != null) {
+                                                  final finalProps =
+                                                      currentComponent
+                                                          .properties
+                                                          .updateProperty(
+                                                            'source',
+                                                            fullUrl,
+                                                          );
+                                                  canvasController
+                                                      .updateComponent(
+                                                        currentComponent
+                                                            .copyWith(
+                                                              properties:
+                                                                  finalProps,
+                                                            ),
+                                                      );
+                                                }
+                                              }
+                                            } catch (e) {
+                                              debugPrint(
+                                                'Error during generation: $e',
+                                              );
+                                            }
+                                          } else {
+                                            // Upload action
+                                            final imageUrl =
+                                                result['url'] as String;
+                                            double? width =
+                                                (result['width'] as num?)
+                                                    ?.toDouble();
+                                            double? height =
+                                                (result['height'] as num?)
+                                                    ?.toDouble();
+
+                                            // Scale down to fit nicely on phone canvas while preserving aspect ratio
+                                            if (width != null &&
+                                                height != null) {
+                                              const double maxDim = 300.0;
+                                              if (width > maxDim ||
+                                                  height > maxDim) {
+                                                double scale =
+                                                    maxDim /
+                                                    (width > height
+                                                        ? width
+                                                        : height);
+                                                width *= scale;
+                                                height *= scale;
+                                              }
+                                            }
+
+                                            var updatedProperties = newComponent
+                                                .properties
+                                                .updateProperty(
+                                                  'source',
+                                                  imageUrl,
+                                                );
+                                            if (width != null) {
+                                              updatedProperties =
+                                                  updatedProperties
+                                                      .updateProperty(
+                                                        'width',
+                                                        width,
+                                                      );
+                                            }
+                                            if (height != null) {
+                                              updatedProperties =
+                                                  updatedProperties
+                                                      .updateProperty(
+                                                        'height',
+                                                        height,
+                                                      );
+                                            }
+
+                                            final updatedComponent =
+                                                newComponent.copyWith(
+                                                  properties: updatedProperties,
+                                                );
+                                            canvasController.onDragEnd(
+                                              Offset(
+                                                constrainedX,
+                                                constrainedY,
+                                              ),
+                                              updatedComponent,
+                                            );
+                                          }
+                                        } else {
+                                          // User cancelled or failed
+                                          canvasController.onDragEnd(
+                                            Offset.zero,
+                                            null,
+                                          );
+                                        }
+                                      });
+                                    } else {
+                                      canvasController.onDragEnd(
+                                        Offset(constrainedX, constrainedY),
+                                        newComponent,
+                                      );
+                                    }
+                                  },
+                                  builder: (context, candidateData, rejectedData) {
+                                    final showDropIndicator =
+                                        candidateData.isNotEmpty;
+
+                                    return Stack(
+                                      children: [
+                                        // Drop zone indicator
+                                        if (showDropIndicator)
+                                          Container(
+                                            width: double.infinity,
+                                            height: double.infinity,
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.withOpacity(
+                                                0.1,
+                                              ),
+                                              border: Border.all(
+                                                color: Colors.blue,
+                                                width: 2.0,
+                                                style: BorderStyle.solid,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(8.0),
+                                            ),
+                                            child: const Center(
+                                              child: Icon(
+                                                Icons.add_circle_outline,
+                                                size: 48,
+                                                color: Colors.blue,
+                                              ),
+                                            ),
+                                          ),
+
+                                        // Canvas boundaries indicator (subtle grid or guides)
+                                        if (!showDropIndicator)
+                                          _buildCanvasGuides(canvasSize),
+
+                                        // Render existing components (visual only, no interactions)
+                                        ...canvasController.components.map((
+                                          component,
+                                        ) {
+                                          return _buildVisualComponentWidget(
+                                            component,
+                                          );
+                                        }),
+
+                                        // Overlay layer for all interactions (dragging, resizing, selection)
+                                        ComponentOverlayLayer(
+                                          canvasSize: canvasSize,
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
 
-                  // BOX SELECTION OVERLAY (Figma-style) - Outside clipped area so it's always visible
-                  if (canvasController.isBoxSelecting &&
-                      canvasController.boxSelectionRect != null)
-                    BoxSelectionOverlay(
-                      rect: canvasController.boxSelectionRect!,
-                    ),
-                  Positioned(
-                    top: 25,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: const BoxDecoration(
-                        color: Colors.black,
-                        shape: BoxShape.circle,
+                      // BOX SELECTION OVERLAY (Figma-style) - Outside clipped area so it's always visible
+                      if (canvasController.isBoxSelecting &&
+                          canvasController.boxSelectionRect != null)
+                        BoxSelectionOverlay(
+                          rect: canvasController.boxSelectionRect!,
+                        ),
+                      Positioned(
+                        top: 25,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: const BoxDecoration(
+                            color: Colors.black,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              );
-            }),
-          ),
+                    ],
+                  );
+                }),
+              ),
+            );
+          },
         ),
       ),
     );

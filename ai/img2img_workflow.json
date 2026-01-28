@@ -1,0 +1,141 @@
+{
+    "9": {
+        "inputs": {
+            "filename_prefix": "z-image-img2img",
+            "images": [
+                "40",
+                0
+            ]
+        },
+        "class_type": "SaveImage",
+        "_meta": {
+            "title": "Save Image"
+        }
+    },
+    "39": {
+        "inputs": {
+            "conditioning": [
+                "42",
+                0
+            ]
+        },
+        "class_type": "ConditioningZeroOut",
+        "_meta": {
+            "title": "ConditioningZeroOut"
+        }
+    },
+    "40": {
+        "inputs": {
+            "samples": [
+                "41",
+                0
+            ],
+            "vae": [
+                "44",
+                0
+            ]
+        },
+        "class_type": "VAEDecode",
+        "_meta": {
+            "title": "VAE Decode"
+        }
+    },
+    "41": {
+        "inputs": {
+            "seed": 977921592732733,
+            "steps": 2,
+            "cfg": 1,
+            "sampler_name": "res_multistep",
+            "scheduler": "simple",
+            "denoise": 0.5,
+            "model": [
+                "48",
+                0
+            ],
+            "positive": [
+                "42",
+                0
+            ],
+            "negative": [
+                "39",
+                0
+            ],
+            "latent_image": [
+                "102",
+                0
+            ]
+        },
+        "class_type": "KSampler",
+        "_meta": {
+            "title": "KSampler"
+        }
+    },
+    "42": {
+        "inputs": {
+            "text": "prompt",
+            "clip": [
+                "46",
+                0
+            ]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": {
+            "title": "CLIP Text Encode (Prompt)"
+        }
+    },
+    "44": {
+        "inputs": {
+            "vae_name": "ae.safetensors"
+        },
+        "class_type": "VAELoader",
+        "_meta": {
+            "title": "Load VAE"
+        }
+    },
+    "46": {
+        "inputs": {
+            "clip_name": "qwen_3_4b.safetensors",
+            "type": "lumina2",
+            "device": "default"
+        },
+        "class_type": "CLIPLoader",
+        "_meta": {
+            "title": "Load CLIP"
+        }
+    },
+    "48": {
+        "inputs": {
+            "unet_name": "z_image_turbo-Q4_K_M.gguf"
+        },
+        "class_type": "UnetLoaderGGUF",
+        "_meta": {
+            "title": "Unet Loader (GGUF)"
+        }
+    },
+    "101": {
+        "inputs": {
+            "image": "example.png",
+            "upload": "image"
+        },
+        "class_type": "LoadImage",
+        "_meta": {
+            "title": "Load Image"
+        }
+    },
+    "102": {
+        "inputs": {
+            "pixels": [
+                "101",
+                0
+            ],
+            "vae": [
+                "44",
+                0
+            ]
+        },
+        "class_type": "VAEEncode",
+        "_meta": {
+            "title": "VAE Encode"
+        }
+    }
+}

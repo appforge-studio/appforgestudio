@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:json_dynamic_widget/json_dynamic_widget.dart';
 
@@ -48,6 +49,25 @@ class JsonImageBuilder extends JsonWidgetBuilder {
       try {
         boxFit = BoxFit.values.firstWhere((e) => e.name == fitString);
       } catch (_) {}
+    }
+
+    // Handle base64 previews
+    if (imageUrl.startsWith('data:')) {
+      try {
+        final base64String = imageUrl.split(',').last;
+        final bytes = base64.decode(base64String);
+        return Image.memory(
+          bytes,
+          width: width?.toDouble(),
+          height: height?.toDouble(),
+          fit: boxFit,
+          key: key,
+          errorBuilder: (context, error, stackTrace) =>
+              const Center(child: Icon(Icons.broken_image)),
+        );
+      } catch (e) {
+        return const Center(child: Icon(Icons.broken_image));
+      }
     }
 
     // Determine if it's a network image or asset

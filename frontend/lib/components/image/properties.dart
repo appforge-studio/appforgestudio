@@ -6,7 +6,7 @@ import 'package:flutter/painting.dart'; // Needed for Alignment
 class ImageProperties {
   static ComponentProperties createDefault() {
     return ComponentProperties([
-            const StringProperty(
+      const StringProperty(
         key: 'source',
         displayName: 'Source',
         value: 'https://via.placeholder.com/150',
@@ -40,13 +40,22 @@ class ImageProperties {
         group: 'Appearance',
         enable: Enabled(show: true, enabled: true),
       ),
+      const ActionProperty(
+        key: 'editImage',
+        displayName: 'Edit Image',
+        group: 'Image',
+        onAction: _dummyAction,
+      ),
     ]);
   }
+
+  static void _dummyAction() {}
 
   static Map<String, String? Function(dynamic)> get validators => {
     'source': (value) => value is String ? null : 'source must be a string',
     'width': (value) => value is num ? null : 'width must be a number',
     'height': (value) => value is num ? null : 'height must be a number',
-    'borderRadius': (value) => value is num ? null : 'borderRadius must be a number',
+    'borderRadius': (value) =>
+        value is num ? null : 'borderRadius must be a number',
   };
 }

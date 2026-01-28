@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'bindings/app_bindings.dart';
@@ -42,43 +43,62 @@ class VisualBuilderHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = Get.find<CanvasController>();
+
     return Scaffold(
       backgroundColor: Pallet.background,
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          // Global deselection - deselect when clicking anywhere except property editor
-          print('🎯 Global tap detected - deselecting component');
-          Get.find<CanvasController>().onComponentDeselected();
+      body: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () =>
+              controller.undo(),
+          const SingleActivator(
+            LogicalKeyboardKey.keyZ,
+            control: true,
+            shift: true,
+          ): () =>
+              controller.redo(),
+          const SingleActivator(LogicalKeyboardKey.keyY, control: true): () =>
+              controller.redo(),
         },
-        child: Row(
-          children: [
-            // Component Panel (left side)
-            const ComponentPanel(),
+        child: Focus(
+          autofocus: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              // Global deselection - deselect when clicking anywhere except property editor
+              // print('🎯 Global tap detected - deselecting component');
+              Get.find<CanvasController>().onComponentDeselected();
+            },
+            child: Row(
+              children: [
+                // Component Panel (left side)
+                const ComponentPanel(),
 
-            Expanded(
-              child: Column(
-                children: [
-                  const SizedBox(height: 15),
-                  // const Tabs(), // TODO: Implement Tabs if needed matching old UI
-                  const SizedBox(height: 5),
-                  // Design Canvas (center)
-                  const Expanded(child: DesignCanvas()),
-                ],
-              ),
-            ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 15),
+                      // const UndoRedoToolbar(), // Removed per user request
+                      // const SizedBox(height: 5),
+                      // Design Canvas (center)
+                      const Expanded(child: DesignCanvas()),
+                    ],
+                  ),
+                ),
 
-            // Property Editor (right side) - prevent deselection when clicking here
-            GestureDetector(
-              behavior:
-                  HitTestBehavior.opaque, // Block taps from reaching parent
-              onTap: () {
-                // Absorb taps to prevent deselection when clicking on property editor
-                print('🎯 Property editor tap - not deselecting');
-              },
-              child: const PropertyEditor(),
+                // Property Editor (right side) - prevent deselection when clicking here
+                GestureDetector(
+                  behavior:
+                      HitTestBehavior.opaque, // Block taps from reaching parent
+                  onTap: () {
+                    // Absorb taps to prevent deselection when clicking on property editor
+                    // print('🎯 Property editor tap - not deselecting');
+                  },
+                  child: const PropertyEditor(),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

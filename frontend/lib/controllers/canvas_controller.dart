@@ -81,8 +81,39 @@ class CanvasController extends GetxController
   // Cursor getter
   SystemMouseCursor get currentCursor => _currentCursor.value;
 
+  // History State
+  final RxList<CanvasState> _undoStack = <CanvasState>[].obs;
+  final RxList<CanvasState> _redoStack = <CanvasState>[].obs;
+  static const int _maxHistorySize = 50;
+
+  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  void saveCheckpoint() {
+    if (_undoStack.length >= _maxHistorySize) {
+      _undoStack.removeAt(0);
+    }
+    _undoStack.add(_state.value);
+    _redoStack.clear();
+  }
+
+  void undo() {
+    if (!canUndo) return;
+    final previousState = _undoStack.removeLast();
+    _redoStack.add(_state.value);
+    _updateState(previousState);
+  }
+
+  void redo() {
+    if (!canRedo) return;
+    final nextState = _redoStack.removeLast();
+    _undoStack.add(_state.value);
+    _updateState(nextState);
+  }
+
   // Component CRUD operations
   void addComponent(ComponentModel component) {
+    saveCheckpoint();
     final updatedComponents = List<ComponentModel>.from(_state.value.components)
       ..add(component);
 
@@ -95,6 +126,7 @@ class CanvasController extends GetxController
   }
 
   void removeComponent(String componentId) {
+    saveCheckpoint();
     final updatedComponents = _state.value.components
         .where((component) => component.id != componentId)
         .toList();
@@ -118,6 +150,7 @@ class CanvasController extends GetxController
 
   void deleteSelectedComponents() {
     if (_state.value.selectedComponentIds.isEmpty) return;
+    saveCheckpoint();
 
     final updatedComponents = _state.value.components
         .where(
@@ -190,6 +223,7 @@ class CanvasController extends GetxController
   }
 
   void bringToFront(String componentId) {
+    saveCheckpoint();
     final component = getComponentById(componentId);
     if (component == null) return;
 
@@ -201,6 +235,7 @@ class CanvasController extends GetxController
   }
 
   void sendToBack(String componentId) {
+    saveCheckpoint();
     final component = getComponentById(componentId);
     if (component == null) return;
 
@@ -224,6 +259,7 @@ class CanvasController extends GetxController
 
   // Simplified drag state management - used by json_dynamic_widget functions
   void setDragState(String componentId, bool isDragging) {
+    if (isDragging) saveCheckpoint();
     _isDraggingComponent.value = isDragging;
     _draggingComponentId.value = isDragging ? componentId : '';
     if (!isDragging) {
@@ -240,6 +276,7 @@ class CanvasController extends GetxController
     bool isResizing, {
     String handle = '',
   }) {
+    if (isResizing) saveCheckpoint();
     _isResizingComponent.value = isResizing;
     _resizingComponentId.value = isResizing ? componentId : '';
     _resizeHandle.value = handle;
@@ -260,6 +297,128 @@ class CanvasController extends GetxController
   // Update cursor based on resize handle
   void _updateCursorForResize(String handle) {
     _currentCursor.value = ComponentOverlayManager.getCursor(handle);
+  }
+
+  // Handle transient component resizing (updates interaction state only)
+  void resizeComponentTransient(
+    String componentId,
+    double deltaX,
+    double deltaY,
+  ) {
+    try {
+      final component = getComponentById(componentId);
+      if (component == null) return;
+
+      final interaction = getInteractionState(componentId);
+      final currentWidth =
+          interaction?.size?.width ??
+          ComponentDimensions.getWidth(component) ??
+          component.detectedSize?.width ??
+          100.0;
+      final currentHeight =
+          interaction?.size?.height ??
+          ComponentDimensions.getHeight(component) ??
+          component.detectedSize?.height ??
+          100.0;
+      final currentX = interaction?.position?.dx ?? component.x;
+      final currentY = interaction?.position?.dy ?? component.y;
+
+      // Log for debugging diagonal resize issues
+      if (_resizeHandle.value.length > 1) {
+        debugPrint(
+          'Resize diag: $_resizeHandle, delta: ($deltaX, $deltaY), curr: $currentWidth x $currentHeight',
+        );
+      }
+
+      double newWidth = currentWidth;
+      double newHeight = currentHeight;
+      double newX = currentX;
+      double newY = currentY;
+
+      // Use consistent resize handle from controller state
+      final handle = _resizeHandle.value;
+
+      switch (handle) {
+        case 'se': // Southeast - resize width and height
+          newWidth = (currentWidth + deltaX).clamp(
+            20.0,
+            canvasSize.width - currentX,
+          );
+          newHeight = (currentHeight + deltaY).clamp(
+            20.0,
+            canvasSize.height - currentY,
+          );
+          break;
+        case 'sw': // Southwest - resize width (left) and height
+          newWidth = (currentWidth - deltaX).clamp(
+            20.0,
+            currentX + currentWidth,
+          );
+          newHeight = (currentHeight + deltaY).clamp(
+            20.0,
+            canvasSize.height - currentY,
+          );
+          newX = currentX + (currentWidth - newWidth);
+          break;
+        case 'ne': // Northeast - resize width and height (top)
+          newWidth = (currentWidth + deltaX).clamp(
+            20.0,
+            canvasSize.width - currentX,
+          );
+          newHeight = (currentHeight - deltaY).clamp(
+            20.0,
+            currentY + currentHeight,
+          );
+          newY = currentY + (currentHeight - newHeight);
+          break;
+        case 'nw': // Northwest - resize width (left) and height (top)
+          newWidth = (currentWidth - deltaX).clamp(
+            20.0,
+            currentX + currentWidth,
+          );
+          newHeight = (currentHeight - deltaY).clamp(
+            20.0,
+            currentY + currentHeight,
+          );
+          newX = currentX + (currentWidth - newWidth);
+          newY = currentY + (currentHeight - newHeight);
+          break;
+        case 'e': // East - resize width only
+          newWidth = (currentWidth + deltaX).clamp(
+            20.0,
+            canvasSize.width - currentX,
+          );
+          break;
+        case 'w': // West - resize width (left) only
+          newWidth = (currentWidth - deltaX).clamp(
+            20.0,
+            currentX + currentWidth,
+          );
+          newX = currentX + (currentWidth - newWidth);
+          break;
+        case 'n': // North - resize height (top) only
+          newHeight = (currentHeight - deltaY).clamp(
+            20.0,
+            currentY + currentHeight,
+          );
+          newY = currentY + (currentHeight - newHeight);
+          break;
+        case 's': // South - resize height only
+          newHeight = (currentHeight + deltaY).clamp(
+            20.0,
+            canvasSize.height - currentY,
+          );
+          break;
+      }
+
+      updateInteraction(
+        componentId,
+        position: Offset(newX, newY),
+        size: Size(newWidth, newHeight),
+      );
+    } catch (e, stack) {
+      debugPrint('Error in resizeComponentTransient: $e\n$stack');
+    }
   }
 
   // Handle component resizing
@@ -422,17 +581,20 @@ class CanvasController extends GetxController
   // Selection management
   @override
   void onComponentSelected(ComponentModel component) {
+    saveCheckpoint();
     // Single selection click (replace existing selection)
     _selectMultipleComponents({component.id});
   }
 
   @override
   void onComponentDeselected() {
+    saveCheckpoint();
     clearSelection();
   }
 
   @override
   void onComponentPropertiesChanged(ComponentModel component) {
+    saveCheckpoint();
     updateComponent(component);
   }
 
@@ -533,6 +695,7 @@ class CanvasController extends GetxController
   // Box Selection Logic
 
   void startBoxSelection(Offset startPos) {
+    saveCheckpoint();
     _isBoxSelecting.value = true;
     _boxSelectionStart = startPos;
     _boxSelectionRect.value = Rect.fromPoints(startPos, startPos);

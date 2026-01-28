@@ -238,6 +238,20 @@ class ArriClientAiService {
     );
   }
 
+  Future<InpaintImageResponse> inpaint_image(InpaintImageParams params) async {
+    return parsedArriRequest(
+      "$_baseUrl/ai/inpaint-image",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => InpaintImageResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+
   Future<AiIterateDesignResponse> iterate_design(
     AiIterateDesignParams params,
   ) async {
@@ -1993,12 +2007,14 @@ class GenerateImageParams implements ArriModel {
   final double? width;
   final double? height;
   final double? steps;
+  final String? socketId;
   const GenerateImageParams({
     required this.prompt,
     this.negativePrompt,
     this.width,
     this.height,
     this.steps,
+    this.socketId,
   });
 
   factory GenerateImageParams.empty() {
@@ -2013,12 +2029,14 @@ class GenerateImageParams implements ArriModel {
     final width = nullableDoubleFromDynamic(_input_["width"]);
     final height = nullableDoubleFromDynamic(_input_["height"]);
     final steps = nullableDoubleFromDynamic(_input_["steps"]);
+    final socketId = nullableTypeFromDynamic<String>(_input_["socketId"]);
     return GenerateImageParams(
       prompt: prompt,
       negativePrompt: negativePrompt,
       width: width,
       height: height,
       steps: steps,
+      socketId: socketId,
     );
   }
 
@@ -2033,6 +2051,7 @@ class GenerateImageParams implements ArriModel {
     if (width != null) _output_["width"] = width;
     if (height != null) _output_["height"] = height;
     if (steps != null) _output_["steps"] = steps;
+    if (socketId != null) _output_["socketId"] = socketId;
     return _output_;
   }
 
@@ -2050,6 +2069,7 @@ class GenerateImageParams implements ArriModel {
     if (width != null) _queryParts_.add("width=$width");
     if (height != null) _queryParts_.add("height=$height");
     if (steps != null) _queryParts_.add("steps=$steps");
+    if (socketId != null) _queryParts_.add("socketId=$socketId");
     return _queryParts_.join("&");
   }
 
@@ -2060,6 +2080,7 @@ class GenerateImageParams implements ArriModel {
     double? Function()? width,
     double? Function()? height,
     double? Function()? steps,
+    String? Function()? socketId,
   }) {
     return GenerateImageParams(
       prompt: prompt ?? this.prompt,
@@ -2069,11 +2090,19 @@ class GenerateImageParams implements ArriModel {
       width: width != null ? width() : this.width,
       height: height != null ? height() : this.height,
       steps: steps != null ? steps() : this.steps,
+      socketId: socketId != null ? socketId() : this.socketId,
     );
   }
 
   @override
-  List<Object?> get props => [prompt, negativePrompt, width, height, steps];
+  List<Object?> get props => [
+    prompt,
+    negativePrompt,
+    width,
+    height,
+    steps,
+    socketId,
+  ];
 
   @override
   bool operator ==(Object other) {
@@ -2162,6 +2191,219 @@ class GenerateImageResponse implements ArriModel {
   @override
   String toString() {
     return "GenerateImageResponse ${toJsonString()}";
+  }
+}
+
+class InpaintImageParams implements ArriModel {
+  final String prompt;
+  final String image;
+  final String mask;
+  final String? negativePrompt;
+  final double? width;
+  final double? height;
+  final double? steps;
+  final String? socketId;
+  const InpaintImageParams({
+    required this.prompt,
+    required this.image,
+    required this.mask,
+    this.negativePrompt,
+    this.width,
+    this.height,
+    this.steps,
+    this.socketId,
+  });
+
+  factory InpaintImageParams.empty() {
+    return InpaintImageParams(prompt: "", image: "", mask: "");
+  }
+
+  factory InpaintImageParams.fromJson(Map<String, dynamic> _input_) {
+    final prompt = typeFromDynamic<String>(_input_["prompt"], "");
+    final image = typeFromDynamic<String>(_input_["image"], "");
+    final mask = typeFromDynamic<String>(_input_["mask"], "");
+    final negativePrompt = nullableTypeFromDynamic<String>(
+      _input_["negativePrompt"],
+    );
+    final width = nullableDoubleFromDynamic(_input_["width"]);
+    final height = nullableDoubleFromDynamic(_input_["height"]);
+    final steps = nullableDoubleFromDynamic(_input_["steps"]);
+    final socketId = nullableTypeFromDynamic<String>(_input_["socketId"]);
+    return InpaintImageParams(
+      prompt: prompt,
+      image: image,
+      mask: mask,
+      negativePrompt: negativePrompt,
+      width: width,
+      height: height,
+      steps: steps,
+      socketId: socketId,
+    );
+  }
+
+  factory InpaintImageParams.fromJsonString(String input) {
+    return InpaintImageParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "prompt": prompt,
+      "image": image,
+      "mask": mask,
+    };
+    if (negativePrompt != null) _output_["negativePrompt"] = negativePrompt;
+    if (width != null) _output_["width"] = width;
+    if (height != null) _output_["height"] = height;
+    if (steps != null) _output_["steps"] = steps;
+    if (socketId != null) _output_["socketId"] = socketId;
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("prompt=$prompt");
+    _queryParts_.add("image=$image");
+    _queryParts_.add("mask=$mask");
+    if (negativePrompt != null)
+      _queryParts_.add("negativePrompt=$negativePrompt");
+    if (width != null) _queryParts_.add("width=$width");
+    if (height != null) _queryParts_.add("height=$height");
+    if (steps != null) _queryParts_.add("steps=$steps");
+    if (socketId != null) _queryParts_.add("socketId=$socketId");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  InpaintImageParams copyWith({
+    String? prompt,
+    String? image,
+    String? mask,
+    String? Function()? negativePrompt,
+    double? Function()? width,
+    double? Function()? height,
+    double? Function()? steps,
+    String? Function()? socketId,
+  }) {
+    return InpaintImageParams(
+      prompt: prompt ?? this.prompt,
+      image: image ?? this.image,
+      mask: mask ?? this.mask,
+      negativePrompt: negativePrompt != null
+          ? negativePrompt()
+          : this.negativePrompt,
+      width: width != null ? width() : this.width,
+      height: height != null ? height() : this.height,
+      steps: steps != null ? steps() : this.steps,
+      socketId: socketId != null ? socketId() : this.socketId,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    prompt,
+    image,
+    mask,
+    negativePrompt,
+    width,
+    height,
+    steps,
+    socketId,
+  ];
+
+  @override
+  bool operator ==(Object other) {
+    return other is InpaintImageParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "InpaintImageParams ${toJsonString()}";
+  }
+}
+
+class InpaintImageResponse implements ArriModel {
+  final bool success;
+  final String message;
+  final String? url;
+  const InpaintImageResponse({
+    required this.success,
+    required this.message,
+    this.url,
+  });
+
+  factory InpaintImageResponse.empty() {
+    return InpaintImageResponse(success: false, message: "");
+  }
+
+  factory InpaintImageResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    final message = typeFromDynamic<String>(_input_["message"], "");
+    final url = nullableTypeFromDynamic<String>(_input_["url"]);
+    return InpaintImageResponse(success: success, message: message, url: url);
+  }
+
+  factory InpaintImageResponse.fromJsonString(String input) {
+    return InpaintImageResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"success": success, "message": message};
+    if (url != null) _output_["url"] = url;
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("success=$success");
+    _queryParts_.add("message=$message");
+    if (url != null) _queryParts_.add("url=$url");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  InpaintImageResponse copyWith({
+    bool? success,
+    String? message,
+    String? Function()? url,
+  }) {
+    return InpaintImageResponse(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      url: url != null ? url() : this.url,
+    );
+  }
+
+  @override
+  List<Object?> get props => [success, message, url];
+
+  @override
+  bool operator ==(Object other) {
+    return other is InpaintImageResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "InpaintImageResponse ${toJsonString()}";
   }
 }
 

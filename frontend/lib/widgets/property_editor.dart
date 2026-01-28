@@ -5,7 +5,7 @@ import '../utilities/pallet.dart';
 
 import '../models/common_property.dart';
 import '../models/component_properties.dart';
-
+import 'inpainting_dialog.dart';
 import 'property_text_field.dart';
 
 import 'property_color_field.dart';
@@ -202,6 +202,8 @@ class GenericPropertyEditor extends StatelessWidget {
         return _buildSideField(property as SideProperty);
       case PropertyType.icon:
         return _buildIconField(property as IconProperty);
+      case PropertyType.action:
+        return _buildActionField(property as ActionProperty);
       default:
         return Text('Unsupported property type: ${property.type}');
     }
@@ -467,9 +469,50 @@ class GenericPropertyEditor extends StatelessWidget {
     );
   }
 
+  Widget _buildActionField(ActionProperty property) {
+    return _buildPropertyRow(
+      property: property,
+      showLabel: false,
+      child: ElevatedButton(
+        onPressed: () {
+          if (property.key == 'editImage') {
+            _handleEditImage();
+          } else {
+            property.onAction();
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Pallet.inside3,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 36),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          elevation: 0,
+        ),
+        child: Text(
+          property.displayName,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
   void _updateValue(String key, dynamic value) {
     final updated = properties.updateProperty(key, value);
     onChanged(updated);
+  }
+
+  void _handleEditImage() async {
+    final source = properties.getProperty<String>('source') ?? '';
+    final width = properties.getProperty<double>('width') ?? 150.0;
+    final height = properties.getProperty<double>('height') ?? 150.0;
+
+    final newUrl = await Get.dialog<String>(
+      InpaintingDialog(imageUrl: source, width: width, height: height),
+    );
+
+    if (newUrl != null) {
+      _updateValue('source', newUrl);
+    }
   }
 
   void _updateEnable(String key, bool enabled) {

@@ -891,7 +891,7 @@ async function generateComponentFactories() {
   const rootDir = getProjectRoot();
   const components2 = await getAvailableComponents(rootDir);
   const templatesDir = join2(rootDir, "backend", "src", "templates", "components");
-  components2.sort((a12, b) => a12.name.localeCompare(b.name));
+  components2.sort((a13, b) => a13.name.localeCompare(b.name));
   const imports = components2.map(
     (c) => `import '../components/${c.name}/component.dart';
 import '../components/${c.name}/properties.dart';`
@@ -1860,7 +1860,8 @@ var generate_image_rpc_default = defineRpc9({
     negativePrompt: a9.optional(a9.string()),
     width: a9.optional(a9.number()),
     height: a9.optional(a9.number()),
-    steps: a9.optional(a9.number())
+    steps: a9.optional(a9.number()),
+    socketId: a9.optional(a9.string())
   }),
   response: a9.object("GenerateImageResponse", {
     success: a9.boolean(),
@@ -1871,7 +1872,7 @@ var generate_image_rpc_default = defineRpc9({
     console.log("!!! [Backend RPC] generate_image HIT !!!");
     console.log("Params:", JSON.stringify(params));
     try {
-      const aiServerUrl = process.env["AI_BASE_URL"] || process.env["AI_SERVER_URL"] || "http://localhost:5000";
+      const aiServerUrl = AI_BASE_URL || "http://localhost:5000";
       const fullUrl = `${aiServerUrl}/generate-image`;
       console.log(`\u{1F50C} Connecting to AI server at: ${fullUrl}`);
       const controller = new AbortController();
@@ -1887,7 +1888,8 @@ var generate_image_rpc_default = defineRpc9({
           negative_prompt: params.negativePrompt || "",
           width: params.width || 512,
           height: params.height || 512,
-          steps: params.steps || 25
+          steps: params.steps || 25,
+          socketId: params.socketId
         }),
         signal: controller.signal
       });
@@ -1919,18 +1921,91 @@ var generate_image_rpc_default = defineRpc9({
   }
 });
 
-// src/procedures/ai/iterate_design.rpc.ts
+// src/procedures/ai/inpaint_image.rpc.ts
 import { defineRpc as defineRpc10 } from "@arrirpc/server";
 import { a as a10 } from "@arrirpc/schema";
-var iterate_design_rpc_default = defineRpc10({
-  params: a10.object({
-    sessionId: a10.string(),
-    prompt: a10.string()
+var inpaint_image_rpc_default = defineRpc10({
+  params: a10.object("InpaintImageParams", {
+    prompt: a10.string(),
+    negativePrompt: a10.optional(a10.string()),
+    width: a10.optional(a10.number()),
+    height: a10.optional(a10.number()),
+    steps: a10.optional(a10.number()),
+    socketId: a10.optional(a10.string()),
+    image: a10.string(),
+    // Base64 image or URL
+    mask: a10.string()
+    // Base64 mask
   }),
-  response: a10.object({
+  response: a10.object("InpaintImageResponse", {
     success: a10.boolean(),
     message: a10.string(),
-    data: a10.any()
+    url: a10.optional(a10.string())
+  }),
+  handler: async ({ params }) => {
+    console.log("!!! [Backend RPC] inpaint_image HIT !!!");
+    try {
+      const aiServerUrl = AI_BASE_URL || "http://localhost:5000";
+      const fullUrl = `${aiServerUrl}/inpaint-image`;
+      console.log(`\u{1F50C} Connecting to AI server at: ${fullUrl}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3e5);
+      const response = await fetch(fullUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          prompt: params.prompt,
+          negative_prompt: params.negativePrompt || "",
+          width: params.width || 512,
+          height: params.height || 512,
+          steps: params.steps || 25,
+          socketId: params.socketId,
+          image: params.image,
+          mask: params.mask
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `AI server returned ${response.status}`);
+      }
+      const imageBuffer = await response.arrayBuffer();
+      const uploadResult = await mediaServer.uploadMedia({
+        originalName: `inpainted-${Date.now()}.png`,
+        bytes: Buffer.from(imageBuffer),
+        contentType: "image/png",
+        directory: "generated"
+      });
+      return {
+        success: true,
+        message: "Image inpainted and uploaded successfully",
+        url: uploadResult.url
+      };
+    } catch (error) {
+      console.error("\u274C Image inpainting failed:", error);
+      return {
+        success: false,
+        message: error.message || "Unknown error occurred during image inpainting"
+      };
+    }
+  }
+});
+
+// src/procedures/ai/iterate_design.rpc.ts
+import { defineRpc as defineRpc11 } from "@arrirpc/server";
+import { a as a11 } from "@arrirpc/schema";
+var iterate_design_rpc_default = defineRpc11({
+  params: a11.object({
+    sessionId: a11.string(),
+    prompt: a11.string()
+  }),
+  response: a11.object({
+    success: a11.boolean(),
+    message: a11.string(),
+    data: a11.any()
   }),
   handler: async ({ params }) => {
     try {
@@ -1952,25 +2027,25 @@ var iterate_design_rpc_default = defineRpc10({
 });
 
 // src/procedures/svg/get_svgs.rpc.ts
-import { a as a11 } from "@arrirpc/schema";
-import { defineRpc as defineRpc11 } from "@arrirpc/server";
+import { a as a12 } from "@arrirpc/schema";
+import { defineRpc as defineRpc12 } from "@arrirpc/server";
 import { or, count, ilike, desc as desc2 } from "drizzle-orm";
-var get_svgs_rpc_default = defineRpc11({
-  params: a11.object("GetSvgsParams", {
-    limit: a11.int32(),
-    offset: a11.int32(),
-    search: a11.string()
+var get_svgs_rpc_default = defineRpc12({
+  params: a12.object("GetSvgsParams", {
+    limit: a12.int32(),
+    offset: a12.int32(),
+    search: a12.string()
   }),
-  response: a11.object("GetSvgsResponse", {
-    success: a11.boolean(),
-    message: a11.string(),
-    total: a11.int32(),
-    svgs: a11.array(
-      a11.object("SvgInfo", {
-        id: a11.string(),
-        name: a11.string(),
-        svg: a11.string(),
-        type: a11.string()
+  response: a12.object("GetSvgsResponse", {
+    success: a12.boolean(),
+    message: a12.string(),
+    total: a12.int32(),
+    svgs: a12.array(
+      a12.object("SvgInfo", {
+        id: a12.string(),
+        name: a12.string(),
+        svg: a12.string(),
+        type: a12.string()
       })
     )
   }),
@@ -2037,6 +2112,7 @@ app_default.rpc("admin.update_component", update_component_rpc_default);
 app_default.rpc("admin.update_type_definition", update_type_definition_rpc_default);
 app_default.rpc("ai.generate_design", generate_design_rpc_default);
 app_default.rpc("ai.generate_image", generate_image_rpc_default);
+app_default.rpc("ai.inpaint_image", inpaint_image_rpc_default);
 app_default.rpc("ai.iterate_design", iterate_design_rpc_default);
 app_default.rpc("svg.get_svgs", get_svgs_rpc_default);
 var arri_app_default = app_default;

@@ -67,6 +67,7 @@ enum PropertyType {
   fontWeight,
   boxFit,
   icon,
+  action,
 }
 
 // String property implementation
@@ -670,6 +671,55 @@ class IconProperty extends Property {
       displayName: displayName,
       group: group ?? this.group,
       value: value?.toString() ?? _value,
+      enable: enable ?? this.enable,
+    );
+  }
+}
+
+// Action property implementation (for buttons)
+class ActionProperty extends Property {
+  final VoidCallback onAction;
+
+  const ActionProperty({
+    required super.key,
+    required super.displayName,
+    super.group,
+    required this.onAction,
+    super.enable = const Enabled(show: false, enabled: true),
+  }) : super(type: PropertyType.action);
+
+  @override
+  Null get value => null;
+
+  @override
+  dynamic toJson() => {'enable': enable.toJson(), 'group': group};
+
+  @override
+  ActionProperty fromJson(dynamic jsonValue) {
+    Enabled en = enable;
+    String grp = group;
+
+    if (jsonValue is Map<String, dynamic> && jsonValue.containsKey('enable')) {
+      en = Enabled.fromJson(jsonValue['enable']);
+      grp = jsonValue['group']?.toString() ?? group;
+    }
+
+    return ActionProperty(
+      key: key,
+      displayName: displayName,
+      group: grp,
+      onAction: onAction,
+      enable: en,
+    );
+  }
+
+  @override
+  ActionProperty copyWith({dynamic value, Enabled? enable, String? group}) {
+    return ActionProperty(
+      key: key,
+      displayName: displayName,
+      group: group ?? this.group,
+      onAction: onAction,
       enable: enable ?? this.enable,
     );
   }

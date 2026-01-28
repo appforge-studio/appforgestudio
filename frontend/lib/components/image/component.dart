@@ -29,6 +29,7 @@ class ImageComponent extends ComponentModel {
     final width = properties.getProperty<double>('width') ?? 150.0;
     final height = properties.getProperty<double>('height') ?? 150.0;
     final fit = properties.getProperty<BoxFit>('fit') ?? BoxFit.cover;
+    final borderRadius = properties.getProperty<double>('borderRadius') ?? 0.0;
 
     // Convert BoxFit enum to string
     String boxFitString = switch (fit) {
@@ -41,8 +42,7 @@ class ImageComponent extends ComponentModel {
       BoxFit.scaleDown => 'scaleDown',
     };
 
-    // Pure visual component - no interactions (handled by overlay layer)
-    return {
+    final imageJson = {
       'type': 'image',
       'args': {
         'image': AppBindings.getAssetUrl(source),
@@ -51,6 +51,18 @@ class ImageComponent extends ComponentModel {
         'fit': boxFitString,
       },
     };
+
+    if (borderRadius > 0) {
+      return {
+        'type': 'clip_rrect',
+        'args': {
+          'borderRadius': {'radius': borderRadius, 'type': 'circular'},
+          'child': imageJson,
+        },
+      };
+    }
+
+    return imageJson;
   }
 
   @override

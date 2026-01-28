@@ -1,6 +1,7 @@
 import { defineRpc } from "@arrirpc/server";
 import { a } from "@arrirpc/schema";
 import { mediaServer } from "../../services/mediaServer";
+import { AI_BASE_URL } from "@env";
 
 export default defineRpc({
     params: a.object("GenerateImageParams", {
@@ -9,6 +10,7 @@ export default defineRpc({
         width: a.optional(a.number()),
         height: a.optional(a.number()),
         steps: a.optional(a.number()),
+        socketId: a.optional(a.string()),
     }),
     response: a.object("GenerateImageResponse", {
         success: a.boolean(),
@@ -19,7 +21,7 @@ export default defineRpc({
         console.log("!!! [Backend RPC] generate_image HIT !!!");
         console.log("Params:", JSON.stringify(params));
         try {
-            const aiServerUrl = process.env['AI_BASE_URL'] || process.env['AI_SERVER_URL'] || "http://localhost:5000";
+            const aiServerUrl = AI_BASE_URL || "http://localhost:5000";
             const fullUrl = `${aiServerUrl}/generate-image`;
             console.log(`🔌 Connecting to AI server at: ${fullUrl}`);
 
@@ -39,6 +41,7 @@ export default defineRpc({
                     width: params.width || 512,
                     height: params.height || 512,
                     steps: params.steps || 25,
+                    socketId: params.socketId,
                 }),
                 signal: controller.signal,
             });

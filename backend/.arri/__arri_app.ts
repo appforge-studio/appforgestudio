@@ -10,6 +10,7 @@ import adminUpdateComponent from "./../src/procedures/admin/update_component.rpc
 import adminUpdateTypeDefinition from "./../src/procedures/admin/update_type_definition.rpc";
 import aiGenerateDesign from "./../src/procedures/ai/generate_design.rpc";
 import aiGenerateImage from "./../src/procedures/ai/generate_image.rpc";
+import aiInpaintImage from "./../src/procedures/ai/inpaint_image.rpc";
 import aiIterateDesign from "./../src/procedures/ai/iterate_design.rpc";
 import svgGetSvgs from "./../src/procedures/svg/get_svgs.rpc";
 
@@ -22,6 +23,7 @@ app.rpc("admin.update_component", adminUpdateComponent);
 app.rpc("admin.update_type_definition", adminUpdateTypeDefinition);
 app.rpc("ai.generate_design", aiGenerateDesign);
 app.rpc("ai.generate_image", aiGenerateImage);
+app.rpc("ai.inpaint_image", aiInpaintImage);
 app.rpc("ai.iterate_design", aiIterateDesign);
 app.rpc("svg.get_svgs", svgGetSvgs);
 
