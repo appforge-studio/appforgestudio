@@ -17,7 +17,8 @@ import 'component_overlay_layer.dart';
 import '../utilities/component_overlay_manager.dart';
 import 'box_selection_overlay.dart';
 import 'image_generator_dialog.dart';
-
+import 'vector_editor/vector_editor.dart';
+import '../models/types/color.dart';
 class DesignCanvas extends StatefulWidget {
   const DesignCanvas({super.key});
 
@@ -665,6 +666,35 @@ class _DesignCanvasState extends State<DesignCanvas> {
               currentWidth = interaction.size!.width;
               currentHeight = interaction.size!.height;
             }
+          }
+
+          // ** Vector Editor Logic **
+          if (canvasController.isEditingComponent && 
+              canvasController.editingComponentId == component.id && 
+              component.type == ComponentType.icon) {
+                
+                // Use detected size if no explicit size
+                final renderWidth = currentWidth > 0 ? currentWidth : (component.detectedSize?.width ?? 100.0);
+                final renderHeight = currentHeight > 0 ? currentHeight : (component.detectedSize?.height ?? 100.0);
+
+                return Transform.translate(
+                   offset: Offset(dx, dy),
+                   child: SizedBox(
+                      width: renderWidth,
+                      height: renderHeight,
+                      child: VectorEditor(
+                          width: renderWidth,
+                          height: renderHeight,
+                          color: (component.properties.getProperty('color') as XDColor?)?.toColor() ?? Colors.black,
+                          pathData: component.properties.getProperty('icon') ?? '',
+                          onPathChanged: (newPath) {
+                              final updatedProps = component.properties.updateProperty('icon', newPath);
+                              canvasController.updateComponent(component.copyWith(properties: updatedProps));
+                          },
+                          onClose: () => canvasController.setEditingComponent(null),
+                      )
+                   )
+                );
           }
 
           Widget childWidget = _renderComponent(component);

@@ -1,0 +1,5 @@
+{
+  "name": "VectorGen AI",
+  "description": "A professional-grade SVG path editor with generative AI capabilities. Create vector graphics using standard pen tools or generate editable paths using natural language prompts.",
+  "requestFramePermissions": []
+}

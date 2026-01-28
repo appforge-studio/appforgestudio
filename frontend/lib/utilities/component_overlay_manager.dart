@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../controllers/canvas_controller.dart';
 import '../models/component_model.dart';
-import '../models/state_classes.dart';
 import 'component_dimensions.dart';
+import '../components/component_factory.dart';
 
 /// Unified manager for all component overlay interactions
 /// Handles dragging, resizing, selection, and cursor management
@@ -65,6 +65,10 @@ class ComponentOverlayManager {
         final isResizing =
             controller.isResizingComponent &&
             controller.resizingComponentId == component.id;
+        final isEditing = controller.isEditingComponent && 
+            controller.editingComponentId == component.id;
+            
+        if (isEditing) return const SizedBox.shrink();
 
         // Interaction state
         final interaction = controller.getInteractionState(component.id);
@@ -177,6 +181,11 @@ class ComponentOverlayManager {
             // Don't select component if box selection is active
             if (!isDragging && !isResizing && !controller.isBoxSelecting) {
               controller.onComponentSelected(component);
+            }
+          },
+          onDoubleTap: () {
+            if (component.type == ComponentType.icon) {
+               controller.setEditingComponent(component.id);
             }
           },
           onSecondaryTapDown: (details) {

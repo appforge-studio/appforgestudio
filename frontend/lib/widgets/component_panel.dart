@@ -8,6 +8,7 @@ import '../utilities/pallet.dart';
 import 'layers_tree.dart';
 import 'search_box.dart';
 import 'agentic_edits_panel.dart';
+import 'vector_editor/vector_editor_panel.dart';
 
 const double controlWidth = 280;
 
@@ -17,10 +18,16 @@ class ComponentPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sidebarController = Get.find<SidebarController>();
-    
+    final canvasController = Get.find<CanvasController>();
+
     return SizedBox(
       width: controlWidth,
-      child: Column(
+      child: Obx(() {
+        if (canvasController.isEditingComponent) {
+            return const VectorEditorPanel();
+        }
+
+        return Column(
         children: [
           // Logo row
           const SizedBox(height: 10),
@@ -90,9 +97,9 @@ class ComponentPanel extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
         ],
-      ),
+      );
+     }),
     );
   }
 

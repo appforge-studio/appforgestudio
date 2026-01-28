@@ -40,6 +40,15 @@ class CanvasController extends GetxController
   // Cursor state tracking
   final Rx<SystemMouseCursor> _currentCursor = SystemMouseCursors.basic.obs;
 
+  // Edit mode state
+  final RxString _editingComponentId = ''.obs;
+  String get editingComponentId => _editingComponentId.value;
+  bool get isEditingComponent => _editingComponentId.isNotEmpty;
+
+  void setEditingComponent(String? id) {
+      _editingComponentId.value = id ?? '';
+  }
+
   // AI Session state
   final RxString _currentSessionId = ''.obs;
   String get currentSessionId => _currentSessionId.value;
@@ -582,6 +591,15 @@ class CanvasController extends GetxController
   @override
   void onComponentSelected(ComponentModel component) {
     saveCheckpoint();
+    
+    // If we select a different component, exit edit mode
+    // (If we select the SAME component, we might want to stay in edit mode if already editing?
+    //  But usually single tap on canvas selects, maybe drag exits?)
+    // For now, if we explicitly select (tap), let's not force exit unless it is a different one.
+    if (editingComponentId != component.id) {
+        setEditingComponent(null);
+    }
+    
     // Single selection click (replace existing selection)
     _selectMultipleComponents({component.id});
   }
@@ -773,6 +791,7 @@ class CanvasController extends GetxController
   }
 
   void clearSelection() {
+    setEditingComponent(null);
     _updateState(
       _state.value.copyWith(
         selectedComponentIds: {},
@@ -781,7 +800,7 @@ class CanvasController extends GetxController
         isPropertyEditorVisible: false,
       ),
     );
-    // Ideally pass explicit null to reset selectedComponent via copyWith logic in state_classes
+     // Ideally pass explicit null to reset selectedComponent via copyWith logic in state_classes
     // But copyWith handles _Undefined. We need to actually pass null.
     // The previous implementation of clearCanvas did: selectedComponent: null.
   }
