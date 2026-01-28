@@ -22,12 +22,7 @@ class ComponentPanel extends StatelessWidget {
 
     return SizedBox(
       width: controlWidth,
-      child: Obx(() {
-        if (canvasController.isEditingComponent) {
-            return const VectorEditorPanel();
-        }
-
-        return Column(
+      child: Column(
         children: [
           // Logo row
           const SizedBox(height: 10),
@@ -56,23 +51,62 @@ class ComponentPanel extends StatelessWidget {
                 Column(
                   children: [
                     const SizedBox(height: 30),
-                    Obx(() => _iconButton(
-                      icon: FontAwesomeIcons.mobile,
-                      selected: sidebarController.selectedPage == 0,
-                      onTap: () => sidebarController.setSelectedPage(0),
-                    )),
-                    const SizedBox(height: 10),
-                    Obx(() => _iconButton(
-                      icon: FontAwesomeIcons.layerGroup,
-                      selected: sidebarController.selectedPage == 1,
-                      onTap: () => sidebarController.setSelectedPage(1),
-                    )),
-                    const SizedBox(height: 10),
-                    Obx(() => _iconButton(
-                      icon: FontAwesomeIcons.server,
-                      selected: sidebarController.selectedPage == 2,
-                      onTap: () => sidebarController.setSelectedPage(2),
-                    )),
+                    Obx(() {
+                       if (canvasController.isEditingComponent) {
+                           // Vector Tools
+                           return Column(
+                               children: [
+                                   _iconButton(
+                                      icon: FontAwesomeIcons.arrowPointer,
+                                      selected: true, // TODO: Track active tool
+                                      onTap: () {},
+                                   ),
+                                   const SizedBox(height: 10),
+                                   _iconButton(
+                                      icon: FontAwesomeIcons.bezierCurve,
+                                      selected: false,
+                                      onTap: () {},
+                                   ),
+                                   const SizedBox(height: 10),
+                                   _iconButton(
+                                      icon: FontAwesomeIcons.pen,
+                                      selected: false,
+                                      onTap: () {},
+                                   ),
+                                   const SizedBox(height: 40),
+                                   _iconButton(
+                                      icon: Icons.check, // Done
+                                      selected: false,
+                                      onTap: () => canvasController.setEditingComponent(null),
+                                      color: Colors.green,
+                                   ),
+                               ]
+                           );
+                       } else {
+                           // Standard Navigation
+                           return Column(
+                               children: [
+                                    _iconButton(
+                                      icon: FontAwesomeIcons.mobile,
+                                      selected: sidebarController.selectedPage == 0,
+                                      onTap: () => sidebarController.setSelectedPage(0),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _iconButton(
+                                      icon: FontAwesomeIcons.layerGroup,
+                                      selected: sidebarController.selectedPage == 1,
+                                      onTap: () => sidebarController.setSelectedPage(1),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _iconButton(
+                                      icon: FontAwesomeIcons.server,
+                                      selected: sidebarController.selectedPage == 2,
+                                      onTap: () => sidebarController.setSelectedPage(2),
+                                    ),
+                               ]
+                           );
+                       }
+                    }),
                   ],
                 ),
                 const SizedBox(width: 10),
@@ -97,9 +131,9 @@ class ComponentPanel extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 10),
         ],
-      );
-     }),
+      ),
     );
   }
 
@@ -107,6 +141,7 @@ class ComponentPanel extends StatelessWidget {
     required IconData icon,
     required bool selected,
     required VoidCallback onTap,
+    Color? color,
   }) {
     return InkWell(
       onTap: onTap,
@@ -117,7 +152,7 @@ class ComponentPanel extends StatelessWidget {
           color: selected ? Colors.white24 : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: FaIcon(icon, color: Pallet.inside3, size: 22),
+        child: FaIcon(icon, color: color ?? Pallet.inside3, size: 22),
       ),
     );
   }
