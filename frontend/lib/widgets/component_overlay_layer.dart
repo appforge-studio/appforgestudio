@@ -9,11 +9,8 @@ import '../utilities/component_overlay_manager.dart';
 /// interfering with the visual rendering of components below.
 class ComponentOverlayLayer extends StatelessWidget {
   final Size canvasSize;
-  
-  const ComponentOverlayLayer({
-    super.key,
-    required this.canvasSize,
-  });
+
+  const ComponentOverlayLayer({super.key, required this.canvasSize});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +42,4 @@ class ComponentOverlayLayer extends StatelessWidget {
       canvasSize: canvasSize,
     );
   }
-
-
 }
-

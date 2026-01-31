@@ -8,38 +8,23 @@ class _Undefined {
 class CanvasState {
   final List<ComponentModel> components;
   final Size canvasSize;
-  final ComponentModel? selectedComponent;
-  final Set<String> selectedComponentIds; // New: Multi-selection support
   final bool isDragging;
-  final bool isPropertyEditorVisible;
 
   const CanvasState({
     this.components = const [],
     this.canvasSize = const Size(375, 812), // iPhone 12 size
-    this.selectedComponent,
-    this.selectedComponentIds = const {},
     this.isDragging = false,
-    this.isPropertyEditorVisible = false,
   });
 
   CanvasState copyWith({
     List<ComponentModel>? components,
     Size? canvasSize,
-    Object? selectedComponent = const _Undefined(),
-    Set<String>? selectedComponentIds,
     bool? isDragging,
-    bool? isPropertyEditorVisible,
   }) {
     return CanvasState(
       components: components ?? this.components,
       canvasSize: canvasSize ?? this.canvasSize,
-      selectedComponent: selectedComponent is _Undefined
-          ? this.selectedComponent
-          : selectedComponent as ComponentModel?,
-      selectedComponentIds: selectedComponentIds ?? this.selectedComponentIds,
       isDragging: isDragging ?? this.isDragging,
-      isPropertyEditorVisible:
-          isPropertyEditorVisible ?? this.isPropertyEditorVisible,
     );
   }
 
@@ -47,10 +32,7 @@ class CanvasState {
     return {
       'components': components.map((c) => c.toJson()).toList(),
       'canvasSize': {'width': canvasSize.width, 'height': canvasSize.height},
-      'selectedComponent': selectedComponent?.toJson(),
-      'selectedComponentIds': selectedComponentIds.toList(),
       'isDragging': isDragging,
-      'isPropertyEditorVisible': isPropertyEditorVisible,
     };
   }
 }

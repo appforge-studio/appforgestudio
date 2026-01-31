@@ -5,3 +5,4 @@ export * from "./schema/components";
 export * from "./schema/svgs";
 export * from "./schema/ai_cache";
 export * from "./schema/ai_sessions";
+export * from "./schema/screens";

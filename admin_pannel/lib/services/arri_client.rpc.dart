@@ -45,6 +45,15 @@ class ArriClient {
     timeout: _timeout,
   );
 
+  ArriClientScreensService get screens => ArriClientScreensService(
+    baseUrl: _baseUrl,
+    headers: _headers,
+    httpClient: _httpClient,
+    onError: _onError,
+    heartbeatTimeoutMultiplier: _heartbeatTimeoutMultiplier,
+    timeout: _timeout,
+  );
+
   ArriClientSvgService get svg => ArriClientSvgService(
     baseUrl: _baseUrl,
     headers: _headers,
@@ -206,6 +215,20 @@ class ArriClientAiService {
        _heartbeatTimeoutMultiplier = heartbeatTimeoutMultiplier,
        _timeout = timeout;
 
+  Future<EditImageResponse> edit_image(EditImageParams params) async {
+    return parsedArriRequest(
+      "$_baseUrl/ai/edit-image",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => EditImageResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+
   Future<GenerateDesignResponse> generate_design(
     GenerateDesignParams params,
   ) async {
@@ -238,6 +261,22 @@ class ArriClientAiService {
     );
   }
 
+  Future<GenerateWithPreviewResponse> generate_with_preview(
+    GenerateWithPreviewParams params,
+  ) async {
+    return parsedArriRequest(
+      "$_baseUrl/ai/generate-with-preview",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => GenerateWithPreviewResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+
   Future<InpaintImageResponse> inpaint_image(InpaintImageParams params) async {
     return parsedArriRequest(
       "$_baseUrl/ai/inpaint-image",
@@ -263,6 +302,85 @@ class ArriClientAiService {
       clientVersion: _clientVersion,
       params: params.toJson(),
       parser: (body) => AiIterateDesignResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+}
+
+class ArriClientScreensService {
+  final http.Client? _httpClient;
+  final String _baseUrl;
+  final String _clientVersion = "";
+  final FutureOr<Map<String, String>> Function()? _headers;
+  final Function(Object)? _onError;
+  final int? _heartbeatTimeoutMultiplier;
+  final Duration? _timeout;
+  ArriClientScreensService({
+    http.Client? httpClient,
+    required String baseUrl,
+    FutureOr<Map<String, String>> Function()? headers,
+    Function(Object)? onError,
+    int? heartbeatTimeoutMultiplier,
+    Duration? timeout,
+  }) : _httpClient = httpClient,
+       _baseUrl = baseUrl,
+       _headers = headers,
+       _onError = onError,
+       _heartbeatTimeoutMultiplier = heartbeatTimeoutMultiplier,
+       _timeout = timeout;
+
+  Future<CreateScreenResponse> create_screen(CreateScreenParams params) async {
+    return parsedArriRequest(
+      "$_baseUrl/screens/create-screen",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => CreateScreenResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+
+  Future<DeleteScreenResponse> delete_screen(DeleteScreenParams params) async {
+    return parsedArriRequest(
+      "$_baseUrl/screens/delete-screen",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => DeleteScreenResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+
+  Future<GetScreensResponse> get_screens(GetScreensParams params) async {
+    return parsedArriRequest(
+      "$_baseUrl/screens/get-screens",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => GetScreensResponse.fromJsonString(body),
+      onError: _onError,
+      timeout: _timeout,
+    );
+  }
+
+  Future<UpdateScreenResponse> update_screen(UpdateScreenParams params) async {
+    return parsedArriRequest(
+      "$_baseUrl/screens/update-screen",
+      method: HttpMethod.post,
+      httpClient: _httpClient,
+      headers: _headers,
+      clientVersion: _clientVersion,
+      params: params.toJson(),
+      parser: (body) => UpdateScreenResponse.fromJsonString(body),
       onError: _onError,
       timeout: _timeout,
     );
@@ -1848,30 +1966,113 @@ class UpdateTypeDefinitionResponse implements ArriModel {
   }
 }
 
-class GenerateDesignParams implements ArriModel {
+class EditImageParams implements ArriModel {
   final String prompt;
-  final String sessionId;
-  const GenerateDesignParams({required this.prompt, required this.sessionId});
+  final String image;
+  final double? steps;
+  const EditImageParams({
+    required this.prompt,
+    required this.image,
+    this.steps,
+  });
 
-  factory GenerateDesignParams.empty() {
-    return GenerateDesignParams(prompt: "", sessionId: "");
+  factory EditImageParams.empty() {
+    return EditImageParams(prompt: "", image: "");
   }
 
-  factory GenerateDesignParams.fromJson(Map<String, dynamic> _input_) {
+  factory EditImageParams.fromJson(Map<String, dynamic> _input_) {
     final prompt = typeFromDynamic<String>(_input_["prompt"], "");
-    final sessionId = typeFromDynamic<String>(_input_["sessionId"], "");
-    return GenerateDesignParams(prompt: prompt, sessionId: sessionId);
+    final image = typeFromDynamic<String>(_input_["image"], "");
+    final steps = nullableDoubleFromDynamic(_input_["steps"]);
+    return EditImageParams(prompt: prompt, image: image, steps: steps);
   }
 
-  factory GenerateDesignParams.fromJsonString(String input) {
-    return GenerateDesignParams.fromJson(json.decode(input));
+  factory EditImageParams.fromJsonString(String input) {
+    return EditImageParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"prompt": prompt, "image": image};
+    if (steps != null) _output_["steps"] = steps;
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("prompt=$prompt");
+    _queryParts_.add("image=$image");
+    if (steps != null) _queryParts_.add("steps=$steps");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  EditImageParams copyWith({
+    String? prompt,
+    String? image,
+    double? Function()? steps,
+  }) {
+    return EditImageParams(
+      prompt: prompt ?? this.prompt,
+      image: image ?? this.image,
+      steps: steps != null ? steps() : this.steps,
+    );
+  }
+
+  @override
+  List<Object?> get props => [prompt, image, steps];
+
+  @override
+  bool operator ==(Object other) {
+    return other is EditImageParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "EditImageParams ${toJsonString()}";
+  }
+}
+
+class EditImageResponse implements ArriModel {
+  final bool success;
+  final String message;
+  final dynamic data;
+  const EditImageResponse({
+    required this.success,
+    required this.message,
+    required this.data,
+  });
+
+  factory EditImageResponse.empty() {
+    return EditImageResponse(success: false, message: "", data: null);
+  }
+
+  factory EditImageResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    final message = typeFromDynamic<String>(_input_["message"], "");
+    final data = _input_["data"];
+    return EditImageResponse(success: success, message: message, data: data);
+  }
+
+  factory EditImageResponse.fromJsonString(String input) {
+    return EditImageResponse.fromJson(json.decode(input));
   }
 
   @override
   Map<String, dynamic> toJson() {
     final _output_ = <String, dynamic>{
-      "prompt": prompt,
-      "sessionId": sessionId,
+      "success": success,
+      "message": message,
+      "data": data,
     };
 
     return _output_;
@@ -1885,21 +2086,108 @@ class GenerateDesignParams implements ArriModel {
   @override
   String toUrlQueryParams() {
     final _queryParts_ = <String>[];
-    _queryParts_.add("prompt=$prompt");
-    _queryParts_.add("sessionId=$sessionId");
+    _queryParts_.add("success=$success");
+    _queryParts_.add("message=$message");
+    print(
+      "[WARNING] any's cannot be serialized to query params. Skipping field at /EditImageResponse/data.",
+    );
     return _queryParts_.join("&");
   }
 
   @override
-  GenerateDesignParams copyWith({String? prompt, String? sessionId}) {
-    return GenerateDesignParams(
-      prompt: prompt ?? this.prompt,
-      sessionId: sessionId ?? this.sessionId,
+  EditImageResponse copyWith({bool? success, String? message, dynamic data}) {
+    return EditImageResponse(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      data: data ?? this.data,
     );
   }
 
   @override
-  List<Object?> get props => [prompt, sessionId];
+  List<Object?> get props => [success, message, data];
+
+  @override
+  bool operator ==(Object other) {
+    return other is EditImageResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "EditImageResponse ${toJsonString()}";
+  }
+}
+
+class GenerateDesignParams implements ArriModel {
+  final String prompt;
+  final String sessionId;
+  final String? apiKey;
+  const GenerateDesignParams({
+    required this.prompt,
+    required this.sessionId,
+    this.apiKey,
+  });
+
+  factory GenerateDesignParams.empty() {
+    return GenerateDesignParams(prompt: "", sessionId: "");
+  }
+
+  factory GenerateDesignParams.fromJson(Map<String, dynamic> _input_) {
+    final prompt = typeFromDynamic<String>(_input_["prompt"], "");
+    final sessionId = typeFromDynamic<String>(_input_["sessionId"], "");
+    final apiKey = nullableTypeFromDynamic<String>(_input_["apiKey"]);
+    return GenerateDesignParams(
+      prompt: prompt,
+      sessionId: sessionId,
+      apiKey: apiKey,
+    );
+  }
+
+  factory GenerateDesignParams.fromJsonString(String input) {
+    return GenerateDesignParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "prompt": prompt,
+      "sessionId": sessionId,
+    };
+    if (apiKey != null) _output_["apiKey"] = apiKey;
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("prompt=$prompt");
+    _queryParts_.add("sessionId=$sessionId");
+    if (apiKey != null) _queryParts_.add("apiKey=$apiKey");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GenerateDesignParams copyWith({
+    String? prompt,
+    String? sessionId,
+    String? Function()? apiKey,
+  }) {
+    return GenerateDesignParams(
+      prompt: prompt ?? this.prompt,
+      sessionId: sessionId ?? this.sessionId,
+      apiKey: apiKey != null ? apiKey() : this.apiKey,
+    );
+  }
+
+  @override
+  List<Object?> get props => [prompt, sessionId, apiKey];
 
   @override
   bool operator ==(Object other) {
@@ -2194,6 +2482,205 @@ class GenerateImageResponse implements ArriModel {
   }
 }
 
+class GenerateWithPreviewParams implements ArriModel {
+  final String prompt;
+  final String? negativePrompt;
+  final double? width;
+  final double? height;
+  final double? steps;
+  final String? socketId;
+  const GenerateWithPreviewParams({
+    required this.prompt,
+    this.negativePrompt,
+    this.width,
+    this.height,
+    this.steps,
+    this.socketId,
+  });
+
+  factory GenerateWithPreviewParams.empty() {
+    return GenerateWithPreviewParams(prompt: "");
+  }
+
+  factory GenerateWithPreviewParams.fromJson(Map<String, dynamic> _input_) {
+    final prompt = typeFromDynamic<String>(_input_["prompt"], "");
+    final negativePrompt = nullableTypeFromDynamic<String>(
+      _input_["negativePrompt"],
+    );
+    final width = nullableDoubleFromDynamic(_input_["width"]);
+    final height = nullableDoubleFromDynamic(_input_["height"]);
+    final steps = nullableDoubleFromDynamic(_input_["steps"]);
+    final socketId = nullableTypeFromDynamic<String>(_input_["socketId"]);
+    return GenerateWithPreviewParams(
+      prompt: prompt,
+      negativePrompt: negativePrompt,
+      width: width,
+      height: height,
+      steps: steps,
+      socketId: socketId,
+    );
+  }
+
+  factory GenerateWithPreviewParams.fromJsonString(String input) {
+    return GenerateWithPreviewParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"prompt": prompt};
+    if (negativePrompt != null) _output_["negativePrompt"] = negativePrompt;
+    if (width != null) _output_["width"] = width;
+    if (height != null) _output_["height"] = height;
+    if (steps != null) _output_["steps"] = steps;
+    if (socketId != null) _output_["socketId"] = socketId;
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("prompt=$prompt");
+    if (negativePrompt != null)
+      _queryParts_.add("negativePrompt=$negativePrompt");
+    if (width != null) _queryParts_.add("width=$width");
+    if (height != null) _queryParts_.add("height=$height");
+    if (steps != null) _queryParts_.add("steps=$steps");
+    if (socketId != null) _queryParts_.add("socketId=$socketId");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GenerateWithPreviewParams copyWith({
+    String? prompt,
+    String? Function()? negativePrompt,
+    double? Function()? width,
+    double? Function()? height,
+    double? Function()? steps,
+    String? Function()? socketId,
+  }) {
+    return GenerateWithPreviewParams(
+      prompt: prompt ?? this.prompt,
+      negativePrompt: negativePrompt != null
+          ? negativePrompt()
+          : this.negativePrompt,
+      width: width != null ? width() : this.width,
+      height: height != null ? height() : this.height,
+      steps: steps != null ? steps() : this.steps,
+      socketId: socketId != null ? socketId() : this.socketId,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    prompt,
+    negativePrompt,
+    width,
+    height,
+    steps,
+    socketId,
+  ];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GenerateWithPreviewParams &&
+        listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GenerateWithPreviewParams ${toJsonString()}";
+  }
+}
+
+class GenerateWithPreviewResponse implements ArriModel {
+  final bool success;
+  final String message;
+  final String? url;
+  const GenerateWithPreviewResponse({
+    required this.success,
+    required this.message,
+    this.url,
+  });
+
+  factory GenerateWithPreviewResponse.empty() {
+    return GenerateWithPreviewResponse(success: false, message: "");
+  }
+
+  factory GenerateWithPreviewResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    final message = typeFromDynamic<String>(_input_["message"], "");
+    final url = nullableTypeFromDynamic<String>(_input_["url"]);
+    return GenerateWithPreviewResponse(
+      success: success,
+      message: message,
+      url: url,
+    );
+  }
+
+  factory GenerateWithPreviewResponse.fromJsonString(String input) {
+    return GenerateWithPreviewResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"success": success, "message": message};
+    if (url != null) _output_["url"] = url;
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("success=$success");
+    _queryParts_.add("message=$message");
+    if (url != null) _queryParts_.add("url=$url");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GenerateWithPreviewResponse copyWith({
+    bool? success,
+    String? message,
+    String? Function()? url,
+  }) {
+    return GenerateWithPreviewResponse(
+      success: success ?? this.success,
+      message: message ?? this.message,
+      url: url != null ? url() : this.url,
+    );
+  }
+
+  @override
+  List<Object?> get props => [success, message, url];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GenerateWithPreviewResponse &&
+        listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GenerateWithPreviewResponse ${toJsonString()}";
+  }
+}
+
 class InpaintImageParams implements ArriModel {
   final String prompt;
   final String image;
@@ -2410,7 +2897,12 @@ class InpaintImageResponse implements ArriModel {
 class AiIterateDesignParams implements ArriModel {
   final String sessionId;
   final String prompt;
-  const AiIterateDesignParams({required this.sessionId, required this.prompt});
+  final String? apiKey;
+  const AiIterateDesignParams({
+    required this.sessionId,
+    required this.prompt,
+    this.apiKey,
+  });
 
   factory AiIterateDesignParams.empty() {
     return AiIterateDesignParams(sessionId: "", prompt: "");
@@ -2419,7 +2911,12 @@ class AiIterateDesignParams implements ArriModel {
   factory AiIterateDesignParams.fromJson(Map<String, dynamic> _input_) {
     final sessionId = typeFromDynamic<String>(_input_["sessionId"], "");
     final prompt = typeFromDynamic<String>(_input_["prompt"], "");
-    return AiIterateDesignParams(sessionId: sessionId, prompt: prompt);
+    final apiKey = nullableTypeFromDynamic<String>(_input_["apiKey"]);
+    return AiIterateDesignParams(
+      sessionId: sessionId,
+      prompt: prompt,
+      apiKey: apiKey,
+    );
   }
 
   factory AiIterateDesignParams.fromJsonString(String input) {
@@ -2432,7 +2929,7 @@ class AiIterateDesignParams implements ArriModel {
       "sessionId": sessionId,
       "prompt": prompt,
     };
-
+    if (apiKey != null) _output_["apiKey"] = apiKey;
     return _output_;
   }
 
@@ -2446,19 +2943,25 @@ class AiIterateDesignParams implements ArriModel {
     final _queryParts_ = <String>[];
     _queryParts_.add("sessionId=$sessionId");
     _queryParts_.add("prompt=$prompt");
+    if (apiKey != null) _queryParts_.add("apiKey=$apiKey");
     return _queryParts_.join("&");
   }
 
   @override
-  AiIterateDesignParams copyWith({String? sessionId, String? prompt}) {
+  AiIterateDesignParams copyWith({
+    String? sessionId,
+    String? prompt,
+    String? Function()? apiKey,
+  }) {
     return AiIterateDesignParams(
       sessionId: sessionId ?? this.sessionId,
       prompt: prompt ?? this.prompt,
+      apiKey: apiKey != null ? apiKey() : this.apiKey,
     );
   }
 
   @override
-  List<Object?> get props => [sessionId, prompt];
+  List<Object?> get props => [sessionId, prompt, apiKey];
 
   @override
   bool operator ==(Object other) {
@@ -2558,6 +3061,654 @@ class AiIterateDesignResponse implements ArriModel {
   @override
   String toString() {
     return "AiIterateDesignResponse ${toJsonString()}";
+  }
+}
+
+class CreateScreenParams implements ArriModel {
+  final String name;
+  const CreateScreenParams({required this.name});
+
+  factory CreateScreenParams.empty() {
+    return CreateScreenParams(name: "");
+  }
+
+  factory CreateScreenParams.fromJson(Map<String, dynamic> _input_) {
+    final name = typeFromDynamic<String>(_input_["name"], "");
+    return CreateScreenParams(name: name);
+  }
+
+  factory CreateScreenParams.fromJsonString(String input) {
+    return CreateScreenParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"name": name};
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("name=$name");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  CreateScreenParams copyWith({String? name}) {
+    return CreateScreenParams(name: name ?? this.name);
+  }
+
+  @override
+  List<Object?> get props => [name];
+
+  @override
+  bool operator ==(Object other) {
+    return other is CreateScreenParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "CreateScreenParams ${toJsonString()}";
+  }
+}
+
+class CreateScreenResponse implements ArriModel {
+  final String id;
+  final String name;
+  final String content;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const CreateScreenResponse({
+    required this.id,
+    required this.name,
+    required this.content,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory CreateScreenResponse.empty() {
+    return CreateScreenResponse(
+      id: "",
+      name: "",
+      content: "",
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  factory CreateScreenResponse.fromJson(Map<String, dynamic> _input_) {
+    final id = typeFromDynamic<String>(_input_["id"], "");
+    final name = typeFromDynamic<String>(_input_["name"], "");
+    final content = typeFromDynamic<String>(_input_["content"], "");
+    final createdAt = dateTimeFromDynamic(_input_["createdAt"], DateTime.now());
+    final updatedAt = dateTimeFromDynamic(_input_["updatedAt"], DateTime.now());
+    return CreateScreenResponse(
+      id: id,
+      name: name,
+      content: content,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
+  factory CreateScreenResponse.fromJsonString(String input) {
+    return CreateScreenResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "id": id,
+      "name": name,
+      "content": content,
+      "createdAt": createdAt.toUtc().toIso8601String(),
+      "updatedAt": updatedAt.toUtc().toIso8601String(),
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("id=$id");
+    _queryParts_.add("name=$name");
+    _queryParts_.add("content=$content");
+    _queryParts_.add("createdAt=${createdAt.toUtc().toIso8601String()}");
+    _queryParts_.add("updatedAt=${updatedAt.toUtc().toIso8601String()}");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  CreateScreenResponse copyWith({
+    String? id,
+    String? name,
+    String? content,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return CreateScreenResponse(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      content: content ?? this.content,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, name, content, createdAt, updatedAt];
+
+  @override
+  bool operator ==(Object other) {
+    return other is CreateScreenResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "CreateScreenResponse ${toJsonString()}";
+  }
+}
+
+class DeleteScreenParams implements ArriModel {
+  final String id;
+  const DeleteScreenParams({required this.id});
+
+  factory DeleteScreenParams.empty() {
+    return DeleteScreenParams(id: "");
+  }
+
+  factory DeleteScreenParams.fromJson(Map<String, dynamic> _input_) {
+    final id = typeFromDynamic<String>(_input_["id"], "");
+    return DeleteScreenParams(id: id);
+  }
+
+  factory DeleteScreenParams.fromJsonString(String input) {
+    return DeleteScreenParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"id": id};
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("id=$id");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  DeleteScreenParams copyWith({String? id}) {
+    return DeleteScreenParams(id: id ?? this.id);
+  }
+
+  @override
+  List<Object?> get props => [id];
+
+  @override
+  bool operator ==(Object other) {
+    return other is DeleteScreenParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "DeleteScreenParams ${toJsonString()}";
+  }
+}
+
+class DeleteScreenResponse implements ArriModel {
+  final bool success;
+  const DeleteScreenResponse({required this.success});
+
+  factory DeleteScreenResponse.empty() {
+    return DeleteScreenResponse(success: false);
+  }
+
+  factory DeleteScreenResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    return DeleteScreenResponse(success: success);
+  }
+
+  factory DeleteScreenResponse.fromJsonString(String input) {
+    return DeleteScreenResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"success": success};
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("success=$success");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  DeleteScreenResponse copyWith({bool? success}) {
+    return DeleteScreenResponse(success: success ?? this.success);
+  }
+
+  @override
+  List<Object?> get props => [success];
+
+  @override
+  bool operator ==(Object other) {
+    return other is DeleteScreenResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "DeleteScreenResponse ${toJsonString()}";
+  }
+}
+
+class GetScreensParams implements ArriModel {
+  const GetScreensParams();
+
+  factory GetScreensParams.empty() {
+    return GetScreensParams();
+  }
+
+  factory GetScreensParams.fromJson(Map<String, dynamic> _input_) {
+    return GetScreensParams();
+  }
+
+  factory GetScreensParams.fromJsonString(String input) {
+    return GetScreensParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{};
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GetScreensParams copyWith() {
+    return GetScreensParams();
+  }
+
+  @override
+  List<Object?> get props => [];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GetScreensParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GetScreensParams ${toJsonString()}";
+  }
+}
+
+class GetScreensResponse implements ArriModel {
+  final List<GetScreensResponseScreensElement> screens;
+  const GetScreensResponse({required this.screens});
+
+  factory GetScreensResponse.empty() {
+    return GetScreensResponse(screens: []);
+  }
+
+  factory GetScreensResponse.fromJson(Map<String, dynamic> _input_) {
+    final screens = _input_["screens"] is List
+        ? (_input_["screens"] as List)
+              .map(
+                (_el_) => _el_ is Map<String, dynamic>
+                    ? GetScreensResponseScreensElement.fromJson(_el_)
+                    : GetScreensResponseScreensElement.empty(),
+              )
+              .toList()
+        : <GetScreensResponseScreensElement>[];
+    return GetScreensResponse(screens: screens);
+  }
+
+  factory GetScreensResponse.fromJsonString(String input) {
+    return GetScreensResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "screens": screens.map((_el_) => _el_.toJson()).toList(),
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    print(
+      "[WARNING] arrays cannot be serialized to query params. Skipping field at /GetScreensResponse/screens.",
+    );
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GetScreensResponse copyWith({
+    List<GetScreensResponseScreensElement>? screens,
+  }) {
+    return GetScreensResponse(screens: screens ?? this.screens);
+  }
+
+  @override
+  List<Object?> get props => [screens];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GetScreensResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GetScreensResponse ${toJsonString()}";
+  }
+}
+
+class GetScreensResponseScreensElement implements ArriModel {
+  final String id;
+  final String name;
+  final String content;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const GetScreensResponseScreensElement({
+    required this.id,
+    required this.name,
+    required this.content,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory GetScreensResponseScreensElement.empty() {
+    return GetScreensResponseScreensElement(
+      id: "",
+      name: "",
+      content: "",
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  factory GetScreensResponseScreensElement.fromJson(
+    Map<String, dynamic> _input_,
+  ) {
+    final id = typeFromDynamic<String>(_input_["id"], "");
+    final name = typeFromDynamic<String>(_input_["name"], "");
+    final content = typeFromDynamic<String>(_input_["content"], "");
+    final createdAt = dateTimeFromDynamic(_input_["createdAt"], DateTime.now());
+    final updatedAt = dateTimeFromDynamic(_input_["updatedAt"], DateTime.now());
+    return GetScreensResponseScreensElement(
+      id: id,
+      name: name,
+      content: content,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
+  factory GetScreensResponseScreensElement.fromJsonString(String input) {
+    return GetScreensResponseScreensElement.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "id": id,
+      "name": name,
+      "content": content,
+      "createdAt": createdAt.toUtc().toIso8601String(),
+      "updatedAt": updatedAt.toUtc().toIso8601String(),
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("id=$id");
+    _queryParts_.add("name=$name");
+    _queryParts_.add("content=$content");
+    _queryParts_.add("createdAt=${createdAt.toUtc().toIso8601String()}");
+    _queryParts_.add("updatedAt=${updatedAt.toUtc().toIso8601String()}");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  GetScreensResponseScreensElement copyWith({
+    String? id,
+    String? name,
+    String? content,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return GetScreensResponseScreensElement(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      content: content ?? this.content,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, name, content, createdAt, updatedAt];
+
+  @override
+  bool operator ==(Object other) {
+    return other is GetScreensResponseScreensElement &&
+        listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "GetScreensResponseScreensElement ${toJsonString()}";
+  }
+}
+
+class UpdateScreenParams implements ArriModel {
+  final String id;
+  final String content;
+  const UpdateScreenParams({required this.id, required this.content});
+
+  factory UpdateScreenParams.empty() {
+    return UpdateScreenParams(id: "", content: "");
+  }
+
+  factory UpdateScreenParams.fromJson(Map<String, dynamic> _input_) {
+    final id = typeFromDynamic<String>(_input_["id"], "");
+    final content = typeFromDynamic<String>(_input_["content"], "");
+    return UpdateScreenParams(id: id, content: content);
+  }
+
+  factory UpdateScreenParams.fromJsonString(String input) {
+    return UpdateScreenParams.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{"id": id, "content": content};
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("id=$id");
+    _queryParts_.add("content=$content");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  UpdateScreenParams copyWith({String? id, String? content}) {
+    return UpdateScreenParams(
+      id: id ?? this.id,
+      content: content ?? this.content,
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, content];
+
+  @override
+  bool operator ==(Object other) {
+    return other is UpdateScreenParams && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "UpdateScreenParams ${toJsonString()}";
+  }
+}
+
+class UpdateScreenResponse implements ArriModel {
+  final bool success;
+  final DateTime updatedAt;
+  const UpdateScreenResponse({required this.success, required this.updatedAt});
+
+  factory UpdateScreenResponse.empty() {
+    return UpdateScreenResponse(success: false, updatedAt: DateTime.now());
+  }
+
+  factory UpdateScreenResponse.fromJson(Map<String, dynamic> _input_) {
+    final success = typeFromDynamic<bool>(_input_["success"], false);
+    final updatedAt = dateTimeFromDynamic(_input_["updatedAt"], DateTime.now());
+    return UpdateScreenResponse(success: success, updatedAt: updatedAt);
+  }
+
+  factory UpdateScreenResponse.fromJsonString(String input) {
+    return UpdateScreenResponse.fromJson(json.decode(input));
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final _output_ = <String, dynamic>{
+      "success": success,
+      "updatedAt": updatedAt.toUtc().toIso8601String(),
+    };
+
+    return _output_;
+  }
+
+  @override
+  String toJsonString() {
+    return json.encode(toJson());
+  }
+
+  @override
+  String toUrlQueryParams() {
+    final _queryParts_ = <String>[];
+    _queryParts_.add("success=$success");
+    _queryParts_.add("updatedAt=${updatedAt.toUtc().toIso8601String()}");
+    return _queryParts_.join("&");
+  }
+
+  @override
+  UpdateScreenResponse copyWith({bool? success, DateTime? updatedAt}) {
+    return UpdateScreenResponse(
+      success: success ?? this.success,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  List<Object?> get props => [success, updatedAt];
+
+  @override
+  bool operator ==(Object other) {
+    return other is UpdateScreenResponse && listsAreEqual(props, other.props);
+  }
+
+  @override
+  int get hashCode => listToHashCode(props);
+
+  @override
+  String toString() {
+    return "UpdateScreenResponse ${toJsonString()}";
   }
 }
 

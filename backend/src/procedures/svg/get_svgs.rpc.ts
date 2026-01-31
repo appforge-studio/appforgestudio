@@ -23,7 +23,8 @@ export default defineRpc({
             })
         ),
     }),
-    async handler({ limit, offset, search }) {
+    async handler({ params }) {
+        const { limit, offset, search } = params;
         console.log(`[get_svgs] params: limit=${limit}, offset=${offset}, search=${search}`);
         try {
             const db = getDrizzle();

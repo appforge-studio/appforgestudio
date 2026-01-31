@@ -864,8 +864,8 @@ async function readAndFillTemplate(templatePath, replacements) {
   const template = await fs4.readFile(templatePath, "utf8");
   return fillTemplate(template, replacements);
 }
-function clearAndUpper(text6) {
-  return text6.replace(/-/, "").toUpperCase();
+function clearAndUpper(text7) {
+  return text7.replace(/-/, "").toUpperCase();
 }
 async function getAvailableComponents(rootDir) {
   const componentsDir = join2(rootDir, "frontend", "lib", "components");
@@ -891,7 +891,7 @@ async function generateComponentFactories() {
   const rootDir = getProjectRoot();
   const components2 = await getAvailableComponents(rootDir);
   const templatesDir = join2(rootDir, "backend", "src", "templates", "components");
-  components2.sort((a13, b) => a13.name.localeCompare(b.name));
+  components2.sort((a19, b) => a19.name.localeCompare(b.name));
   const imports = components2.map(
     (c) => `import '../components/${c.name}/component.dart';
 import '../components/${c.name}/properties.dart';`
@@ -1510,9 +1510,72 @@ var update_type_definition_rpc_default = defineRpc7({
   }
 });
 
-// src/procedures/ai/generate_design.rpc.ts
+// src/procedures/ai/edit_image.rpc.ts
 import { defineRpc as defineRpc8 } from "@arrirpc/server";
 import { a as a8 } from "@arrirpc/schema";
+var edit_image_rpc_default = defineRpc8({
+  params: a8.object("EditImageParams", {
+    prompt: a8.string(),
+    image: a8.string(),
+    // Base64 image or URL
+    steps: a8.optional(a8.number())
+  }),
+  response: a8.object("EditImageResponse", {
+    success: a8.boolean(),
+    message: a8.string(),
+    data: a8.any()
+  }),
+  handler: async ({ params }) => {
+    console.log("!!! [Backend RPC] edit-image HIT !!!");
+    try {
+      const aiServerUrl = AI_BASE_URL || "http://localhost:5000";
+      const fullUrl = `${aiServerUrl}/edit-image`;
+      console.log(`\u{1F50C} Connecting to AI server at: ${fullUrl}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3e5);
+      const response = await fetch(fullUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          prompt: params.prompt,
+          image: params.image,
+          steps: params.steps || 25
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `AI server returned ${response.status}`);
+      }
+      const imageBuffer = await response.arrayBuffer();
+      const uploadResult = await mediaServer.uploadMedia({
+        originalName: `edit-image-${Date.now()}.png`,
+        bytes: Buffer.from(imageBuffer),
+        contentType: "image/png",
+        directory: "generated"
+      });
+      return {
+        success: true,
+        message: "Image edited and uploaded successfully",
+        data: uploadResult.url
+      };
+    } catch (error) {
+      console.error("\u274C Edit Image failed:", error);
+      return {
+        success: false,
+        message: error.message || "Unknown error occurred during image editing",
+        data: null
+      };
+    }
+  }
+});
+
+// src/procedures/ai/generate_design.rpc.ts
+import { defineRpc as defineRpc9 } from "@arrirpc/server";
+import { a as a9 } from "@arrirpc/schema";
 
 // src/services/aiService.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -1569,14 +1632,25 @@ import { eq as eq4, asc } from "drizzle-orm";
 import { ulid as ulid4 } from "ulidx";
 var AiService = class {
   static genAI = new GoogleGenerativeAI(env.GOOGLE_STUDIO_API_KEY || "");
-  static async generateDesign(prompt, sessionId, isIteration = false) {
-    const model = this.genAI.getGenerativeModel({
-      model: "gemini-flash-latest",
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
-    });
+  static async generateDesign(prompt, sessionId, isIteration = false, apiKey) {
     const db2 = getDrizzle();
+    const modelName = "gemini-flash-latest";
+    const client2 = apiKey ? new GoogleGenerativeAI(apiKey) : this.genAI;
+    if (!isIteration) {
+      try {
+        const cached = await db2.select().from(aiDesignCache).where(eq4(aiDesignCache.prompt, prompt)).limit(1);
+        if (cached && cached.length > 0) {
+          const entry = cached[0];
+          if (entry) {
+            console.log("\u{1F680} Cache HIT for prompt:", prompt);
+            return JSON.parse(entry.designJson);
+          }
+        }
+        console.log("\u{1F311} Cache MISS for prompt:", prompt);
+      } catch (e) {
+        console.error("\u26A0\uFE0F Cache lookup error:", e);
+      }
+    }
     const allComponents = await db2.select().from(components);
     const allSvgs = await db2.select({ name: svgs.name }).from(svgs);
     const componentTypesList = allComponents.map((c) => `"${c.name}"`).join(" | ");
@@ -1614,6 +1688,27 @@ var AiService = class {
       return `// PROPERTIES FOR "${comp.name}"
         ${propLines}`;
     }).join("\n\n        ");
+    console.log("\u{1F3A8} STEP 1: Generating Design Plan...");
+    const planModel = client2.getGenerativeModel({ model: modelName });
+    const planPrompt = `
+    You are an expert UI/UX designer. Your task is to create a detailed design plan for a Flutter application based on the user's request.
+    
+    USER REQUEST: "${prompt}"
+    
+    AVAILABLE COMPONENTS: [${allComponents.map((c) => c.name).join(", ")}]
+    
+    In your plan, describe:
+    1. The overall layout and structure.
+    2. Which components you will use and why.
+    3. The positioning (x, y) and sizing of these components.
+    4. The color palette and specific property values for each component.
+    5. How the design fulfills the user's request.
+    
+    OUTPUT: A detailed textual description of the design.
+    `;
+    const planResult = await planModel.generateContent(planPrompt);
+    const designPlan = planResult.response.text();
+    console.log("\u2705 Design Plan Generated:\n", designPlan);
     const schemaDescription = `
     You are a UI design generator. Output strictly valid JSON matching this schema for a Flutter app design canvas.
     
@@ -1626,7 +1721,7 @@ var AiService = class {
       "isPropertyEditorVisible": false
     }
 
-    COMPONENT OBJECT:
+    PROPERTIES:
     {
       "id": "unique_string_id",
       "type": ${componentTypesList},
@@ -1646,52 +1741,58 @@ var AiService = class {
     2. All properties MUST be simple direct values (string, number, boolean, or hex string for colors).
     3. Colors MUST be Hex strings (e.g. "#FF0000" or "#AARRGGBB").
     4. For any "icon" property, you MUST use ONLY one of these valid names: [${svgNamesList}].
-    5. Generate a complete, beautiful design based on the user prompt: "${prompt}".
-    6. Ensure components are positioned logically.
+    5. For any "image" component:
+       - You MUST provide a detailed "imagePrompt" string describing what the image should look like.
+       - You MUST set the "image" property to "https://placehold.co/600x400?text=Image+Generating...". DO NOT put the prompt in the "image" property.
+    6. Strictly follow the DESIGN PLAN provided below.
     `;
-    let currentPrompt = schemaDescription;
+    const jsonModel = client2.getGenerativeModel({
+      model: modelName,
+      generationConfig: { responseMimeType: "application/json" }
+    });
+    let currentPrompt = `
+    DESIGN PLAN:
+    ${designPlan}
+
+    JSON SCHEMA & RULES:
+    ${schemaDescription}
+    
+    Based on the DESIGN PLAN, generate the final valid JSON.
+    `;
     let attempts = 0;
     const maxAttempts = 3;
-    const modelName = "gemini-flash-latest";
-    if (!isIteration) {
-      try {
-        const cached = await db2.select().from(aiDesignCache).where(eq4(aiDesignCache.prompt, prompt)).limit(1);
-        if (cached && cached.length > 0) {
-          const entry = cached[0];
-          if (entry) {
-            console.log("\u{1F680} Cache HIT for prompt:", prompt);
-            return JSON.parse(entry.designJson);
-          }
-        }
-        console.log("\u{1F311} Cache MISS for prompt:", prompt);
-      } catch (e) {
-        console.error("\u26A0\uFE0F Cache lookup error:", e);
-      }
-    }
-    console.log("----------------------------------------------------------------");
-    console.log("\u{1F916} GENERATED AI PROMPT:");
-    console.log(currentPrompt);
-    console.log("----------------------------------------------------------------");
     while (attempts < maxAttempts) {
       try {
-        console.log(`\u{1F916} AI Generation Attempt ${attempts + 1}/${maxAttempts}`);
-        console.log("\u23F3 Waiting for Gemini API response...");
-        const result = await model.generateContent(currentPrompt);
-        console.log("\u2705 Received response from Gemini API");
-        console.log("\u23F3 Extracting text from response...");
+        console.log(`\u{1F916} AI JSON Generation Attempt ${attempts + 1}/${maxAttempts}`);
+        const result = await jsonModel.generateContent(currentPrompt);
         const responseText = result.response.text();
-        console.log("\u2705 Text extracted");
         let json;
         try {
-          console.log("\u23F3 Parsing JSON...");
           json = JSON.parse(responseText);
-          console.log("\u2705 JSON parsed successfully");
         } catch (e) {
           console.error("\u274C Failed to parse JSON:", responseText);
           throw new Error("Invalid JSON returned by AI");
         }
         const errors = this.validateDesignJson(json);
         if (errors.length === 0) {
+          const svgContentMap = /* @__PURE__ */ new Map();
+          const allSvgsFull = await db2.select({ name: svgs.name, svg: svgs.svg }).from(svgs);
+          for (const s of allSvgsFull) {
+            svgContentMap.set(s.name, s.svg);
+          }
+          json.components.forEach((comp) => {
+            if (comp.properties && comp.properties.icon) {
+              const iconName = comp.properties.icon;
+              if (svgContentMap.has(iconName)) {
+                console.log(`\u2728 Injecting SVG content for icon "${iconName}"`);
+                comp.properties.icon = svgContentMap.get(iconName);
+              } else {
+                if (!iconName.trim().startsWith("<svg")) {
+                  console.warn(`\u26A0\uFE0F Icon "${iconName}" not found in database and is not an SVG string.`);
+                }
+              }
+            }
+          });
           if (!isIteration && attempts === 0) {
             try {
               await db2.insert(aiDesignCache).values({
@@ -1703,26 +1804,21 @@ var AiService = class {
                 target: aiDesignCache.prompt,
                 set: { designJson: JSON.stringify(json), modelUsed: modelName }
               });
-              console.log("\u2705 Saved to cache (initial successful attempt)");
+              console.log("\u2705 Saved to cache");
             } catch (e) {
               console.error("\u26A0\uFE0F Failed to save to cache:", e);
             }
-          } else if (attempts > 0) {
-            console.log("\u2139\uFE0F Skipping cache save for fixing prompt (attempt > 0)");
-          } else if (isIteration) {
-            console.log("\u2139\uFE0F Skipping cache save for iteration prompt");
           }
           if (sessionId) {
             try {
-              const db3 = getDrizzle();
-              await db3.insert(aiDesignSessions).values({ id: sessionId }).onConflictDoNothing();
-              await db3.insert(aiDesignMessages).values({
+              await db2.insert(aiDesignSessions).values({ id: sessionId }).onConflictDoNothing();
+              await db2.insert(aiDesignMessages).values({
                 id: ulid4(),
                 sessionId,
                 role: "user",
                 content: prompt
               });
-              await db3.insert(aiDesignMessages).values({
+              await db2.insert(aiDesignMessages).values({
                 id: ulid4(),
                 sessionId,
                 role: "assistant",
@@ -1740,26 +1836,26 @@ var AiService = class {
         The previous JSON had the following errors:
 ${errors.join("\n")}
 
-        Please fix these errors and return the valid JSON again.
-        Original Prompt: ${schemaDescription}
+        Please fix these errors and return the valid JSON again based on the DESIGN PLAN.
+        DESIGN PLAN:
+        ${designPlan}
         `;
         attempts++;
       } catch (error) {
         console.error("\u274C AI Generation Error:", error);
         attempts++;
         if (attempts < maxAttempts) {
-          console.log("Waiting 5 seconds before retry...");
           await new Promise((resolve5) => setTimeout(resolve5, 5e3));
         }
       }
     }
     throw new Error("Failed to generate valid design after multiple attempts");
   }
-  static async iterateDesign(sessionId, prompt) {
+  static async iterateDesign(sessionId, prompt, apiKey) {
     const db2 = getDrizzle();
     const history = await db2.select().from(aiDesignMessages).where(eq4(aiDesignMessages.sessionId, sessionId)).orderBy(asc(aiDesignMessages.createdAt));
     if (history.length === 0) {
-      return this.generateDesign(prompt, sessionId, false);
+      return this.generateDesign(prompt, sessionId, false, apiKey);
     }
     let lastDesignJson = "";
     for (let i = history.length - 1; i >= 0; i--) {
@@ -1781,7 +1877,7 @@ ${lastDesignJson}
     Based on the previous design and the user's feedback, provide an updated, corrected JSON.
     Maintain the overall structure but apply the requested changes carefully.
     `;
-    return this.generateDesign(contextPrompt, sessionId, true);
+    return this.generateDesign(contextPrompt, sessionId, true, apiKey);
   }
   static validateDesignJson(json) {
     const errors = [];
@@ -1801,13 +1897,15 @@ ${lastDesignJson}
       }
       if (typeof comp.x !== "number") errors.push(`Component[${index3}] invalid x`);
       if (typeof comp.y !== "number") errors.push(`Component[${index3}] invalid y`);
-      if (!comp.properties) {
-        errors.push(`Component[${index3}] missing properties`);
-      } else {
-        Object.keys(comp.properties).forEach((key) => {
-          const val = comp.properties[key];
-          if (typeof val === "string" && val.trim() !== "" && !isNaN(Number(val)) && !val.startsWith("#")) {
-            comp.properties[key] = parseFloat(val);
+      if (comp.id !== void 0 && typeof comp.id !== "string") {
+        comp.id = String(comp.id);
+      }
+      if (comp.properties) {
+        const stringProps = ["content", "fontFamily", "icon", "text", "label", "hint", "value", "imagePrompt"];
+        stringProps.forEach((prop) => {
+          if (comp.properties[prop] !== void 0 && comp.properties[prop] !== null && typeof comp.properties[prop] !== "string") {
+            console.log(`\u{1FA84} Casting property "${prop}" to string:`, comp.properties[prop]);
+            comp.properties[prop] = String(comp.properties[prop]);
           }
         });
       }
@@ -1817,22 +1915,23 @@ ${lastDesignJson}
 };
 
 // src/procedures/ai/generate_design.rpc.ts
-var generate_design_rpc_default = defineRpc8({
-  params: a8.object("GenerateDesignParams", {
-    prompt: a8.string(),
-    sessionId: a8.string()
+var generate_design_rpc_default = defineRpc9({
+  params: a9.object("GenerateDesignParams", {
+    prompt: a9.string(),
+    sessionId: a9.string(),
     // Changed from optional to avoid generator bug
+    apiKey: a9.optional(a9.string())
   }),
-  response: a8.object("GenerateDesignResponse", {
-    success: a8.boolean(),
-    message: a8.string(),
+  response: a9.object("GenerateDesignResponse", {
+    success: a9.boolean(),
+    message: a9.string(),
     // Changed from nullable
-    data: a8.any()
+    data: a9.any()
   }),
   handler: async ({ params }) => {
     try {
       const effectiveSessionId = params.sessionId || void 0;
-      const designJson = await AiService.generateDesign(params.prompt, effectiveSessionId);
+      const designJson = await AiService.generateDesign(params.prompt, effectiveSessionId, false, params.apiKey);
       const responseStr = JSON.stringify(designJson);
       console.log(`\u2705 Design generated. Size: ${(responseStr.length / 1024).toFixed(2)} KB`);
       return {
@@ -1852,21 +1951,21 @@ var generate_design_rpc_default = defineRpc8({
 });
 
 // src/procedures/ai/generate_image.rpc.ts
-import { defineRpc as defineRpc9 } from "@arrirpc/server";
-import { a as a9 } from "@arrirpc/schema";
-var generate_image_rpc_default = defineRpc9({
-  params: a9.object("GenerateImageParams", {
-    prompt: a9.string(),
-    negativePrompt: a9.optional(a9.string()),
-    width: a9.optional(a9.number()),
-    height: a9.optional(a9.number()),
-    steps: a9.optional(a9.number()),
-    socketId: a9.optional(a9.string())
+import { defineRpc as defineRpc10 } from "@arrirpc/server";
+import { a as a10 } from "@arrirpc/schema";
+var generate_image_rpc_default = defineRpc10({
+  params: a10.object("GenerateImageParams", {
+    prompt: a10.string(),
+    negativePrompt: a10.optional(a10.string()),
+    width: a10.optional(a10.number()),
+    height: a10.optional(a10.number()),
+    steps: a10.optional(a10.number()),
+    socketId: a10.optional(a10.string())
   }),
-  response: a9.object("GenerateImageResponse", {
-    success: a9.boolean(),
-    message: a9.string(),
-    url: a9.optional(a9.string())
+  response: a10.object("GenerateImageResponse", {
+    success: a10.boolean(),
+    message: a10.string(),
+    url: a10.optional(a10.string())
   }),
   handler: async ({ params }) => {
     console.log("!!! [Backend RPC] generate_image HIT !!!");
@@ -1921,26 +2020,96 @@ var generate_image_rpc_default = defineRpc9({
   }
 });
 
+// src/procedures/ai/generate_with_preview.rpc.ts
+import { defineRpc as defineRpc11 } from "@arrirpc/server";
+import { a as a11 } from "@arrirpc/schema";
+var generate_with_preview_rpc_default = defineRpc11({
+  params: a11.object("GenerateWithPreviewParams", {
+    prompt: a11.string(),
+    negativePrompt: a11.optional(a11.string()),
+    width: a11.optional(a11.number()),
+    height: a11.optional(a11.number()),
+    steps: a11.optional(a11.number()),
+    socketId: a11.optional(a11.string())
+  }),
+  response: a11.object("GenerateWithPreviewResponse", {
+    success: a11.boolean(),
+    message: a11.string(),
+    url: a11.optional(a11.string())
+  }),
+  handler: async ({ params }) => {
+    console.log("!!! [Backend RPC] generate_with_preview HIT !!!");
+    console.log("Params:", JSON.stringify(params));
+    try {
+      const aiServerUrl = AI_BASE_URL || "http://localhost:5000";
+      const fullUrl = `${aiServerUrl}/generate-with-preview`;
+      console.log(`\u{1F50C} Connecting to AI server at: ${fullUrl}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3e5);
+      console.log("\u23F3 Waiting for AI server response...");
+      const response = await fetch(fullUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          prompt: params.prompt,
+          negative_prompt: params.negativePrompt || "",
+          width: params.width || 512,
+          height: params.height || 512,
+          steps: params.steps || 25,
+          socketId: params.socketId
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `AI server returned ${response.status}`);
+      }
+      const imageBuffer = await response.arrayBuffer();
+      console.log("\u2705 Image received from AI server, size:", imageBuffer.byteLength);
+      const uploadResult = await mediaServer.uploadMedia({
+        originalName: `generated-${Date.now()}.png`,
+        bytes: Buffer.from(imageBuffer),
+        contentType: "image/png",
+        directory: "generated"
+      });
+      return {
+        success: true,
+        message: "Image generated and uploaded successfully",
+        url: uploadResult.url
+      };
+    } catch (error) {
+      console.error("\u274C Image generation failed:", error);
+      return {
+        success: false,
+        message: error.message || "Unknown error occurred during image generation"
+      };
+    }
+  }
+});
+
 // src/procedures/ai/inpaint_image.rpc.ts
-import { defineRpc as defineRpc10 } from "@arrirpc/server";
-import { a as a10 } from "@arrirpc/schema";
-var inpaint_image_rpc_default = defineRpc10({
-  params: a10.object("InpaintImageParams", {
-    prompt: a10.string(),
-    negativePrompt: a10.optional(a10.string()),
-    width: a10.optional(a10.number()),
-    height: a10.optional(a10.number()),
-    steps: a10.optional(a10.number()),
-    socketId: a10.optional(a10.string()),
-    image: a10.string(),
+import { defineRpc as defineRpc12 } from "@arrirpc/server";
+import { a as a12 } from "@arrirpc/schema";
+var inpaint_image_rpc_default = defineRpc12({
+  params: a12.object("InpaintImageParams", {
+    prompt: a12.string(),
+    negativePrompt: a12.optional(a12.string()),
+    width: a12.optional(a12.number()),
+    height: a12.optional(a12.number()),
+    steps: a12.optional(a12.number()),
+    socketId: a12.optional(a12.string()),
+    image: a12.string(),
     // Base64 image or URL
-    mask: a10.string()
+    mask: a12.string()
     // Base64 mask
   }),
-  response: a10.object("InpaintImageResponse", {
-    success: a10.boolean(),
-    message: a10.string(),
-    url: a10.optional(a10.string())
+  response: a12.object("InpaintImageResponse", {
+    success: a12.boolean(),
+    message: a12.string(),
+    url: a12.optional(a12.string())
   }),
   handler: async ({ params }) => {
     console.log("!!! [Backend RPC] inpaint_image HIT !!!");
@@ -1995,21 +2164,22 @@ var inpaint_image_rpc_default = defineRpc10({
 });
 
 // src/procedures/ai/iterate_design.rpc.ts
-import { defineRpc as defineRpc11 } from "@arrirpc/server";
-import { a as a11 } from "@arrirpc/schema";
-var iterate_design_rpc_default = defineRpc11({
-  params: a11.object({
-    sessionId: a11.string(),
-    prompt: a11.string()
+import { defineRpc as defineRpc13 } from "@arrirpc/server";
+import { a as a13 } from "@arrirpc/schema";
+var iterate_design_rpc_default = defineRpc13({
+  params: a13.object({
+    sessionId: a13.string(),
+    prompt: a13.string(),
+    apiKey: a13.optional(a13.string())
   }),
-  response: a11.object({
-    success: a11.boolean(),
-    message: a11.string(),
-    data: a11.any()
+  response: a13.object({
+    success: a13.boolean(),
+    message: a13.string(),
+    data: a13.any()
   }),
   handler: async ({ params }) => {
     try {
-      const resultJson = await AiService.iterateDesign(params.sessionId, params.prompt);
+      const resultJson = await AiService.iterateDesign(params.sessionId, params.prompt, params.apiKey);
       return {
         success: true,
         message: "",
@@ -2026,30 +2196,160 @@ var iterate_design_rpc_default = defineRpc11({
   }
 });
 
-// src/procedures/svg/get_svgs.rpc.ts
-import { a as a12 } from "@arrirpc/schema";
-import { defineRpc as defineRpc12 } from "@arrirpc/server";
-import { or, count, ilike, desc as desc2 } from "drizzle-orm";
-var get_svgs_rpc_default = defineRpc12({
-  params: a12.object("GetSvgsParams", {
-    limit: a12.int32(),
-    offset: a12.int32(),
-    search: a12.string()
+// src/procedures/screens/create_screen.rpc.ts
+import { defineRpc as defineRpc14 } from "@arrirpc/server";
+import { a as a14 } from "@arrirpc/schema";
+
+// ../database/schema/screens.ts
+import { pgTable as pgTable6, text as text6, varchar as varchar7 } from "drizzle-orm/pg-core";
+var screens = pgTable6("screens", {
+  id: ulidField("id").primaryKey(),
+  name: varchar7("name", { length: 255 }).notNull(),
+  content: text6("content").notNull().default("[]"),
+  // JSON string of components
+  ...defaultDateFields
+});
+
+// src/procedures/screens/create_screen.rpc.ts
+import { ulid as ulid5 } from "ulidx";
+var create_screen_rpc_default = defineRpc14({
+  params: a14.object("CreateScreenParams", {
+    name: a14.string()
   }),
-  response: a12.object("GetSvgsResponse", {
-    success: a12.boolean(),
-    message: a12.string(),
-    total: a12.int32(),
-    svgs: a12.array(
-      a12.object("SvgInfo", {
-        id: a12.string(),
-        name: a12.string(),
-        svg: a12.string(),
-        type: a12.string()
+  response: a14.object("CreateScreenResponse", {
+    id: a14.string(),
+    name: a14.string(),
+    content: a14.string(),
+    createdAt: a14.timestamp(),
+    updatedAt: a14.timestamp()
+  }),
+  handler: async ({ params }) => {
+    const db2 = getDrizzle();
+    const newScreenId = ulid5();
+    const [insertedScreen] = await db2.insert(screens).values({
+      id: newScreenId,
+      name: params.name,
+      content: "[]"
+    }).returning();
+    if (!insertedScreen) {
+      throw new Error("Failed to create screen");
+    }
+    return {
+      id: insertedScreen.id,
+      name: insertedScreen.name,
+      content: insertedScreen.content,
+      createdAt: insertedScreen.createdAt,
+      updatedAt: insertedScreen.updatedAt
+    };
+  }
+});
+
+// src/procedures/screens/delete_screen.rpc.ts
+import { defineRpc as defineRpc15 } from "@arrirpc/server";
+import { a as a15 } from "@arrirpc/schema";
+import { eq as eq5 } from "drizzle-orm";
+var delete_screen_rpc_default = defineRpc15({
+  params: a15.object("DeleteScreenParams", {
+    id: a15.string()
+  }),
+  response: a15.object("DeleteScreenResponse", {
+    success: a15.boolean()
+  }),
+  handler: async ({ params }) => {
+    const db2 = getDrizzle();
+    await db2.delete(screens).where(eq5(screens.id, params.id));
+    return {
+      success: true
+    };
+  }
+});
+
+// src/procedures/screens/get_screens.rpc.ts
+import { defineRpc as defineRpc16 } from "@arrirpc/server";
+import { a as a16 } from "@arrirpc/schema";
+import { desc as desc2 } from "drizzle-orm";
+var get_screens_rpc_default = defineRpc16({
+  params: a16.object("GetScreensParams", {}),
+  response: a16.object("GetScreensResponse", {
+    screens: a16.array(
+      a16.object({
+        id: a16.string(),
+        name: a16.string(),
+        content: a16.string(),
+        createdAt: a16.timestamp(),
+        updatedAt: a16.timestamp()
       })
     )
   }),
-  async handler({ limit, offset, search }) {
+  handler: async () => {
+    const db2 = getDrizzle();
+    const results = await db2.select().from(screens).orderBy(desc2(screens.updatedAt));
+    return {
+      screens: results.map((s) => ({
+        id: s.id,
+        name: s.name,
+        content: s.content,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt
+      }))
+    };
+  }
+});
+
+// src/procedures/screens/update_screen.rpc.ts
+import { defineRpc as defineRpc17 } from "@arrirpc/server";
+import { a as a17 } from "@arrirpc/schema";
+import { eq as eq6 } from "drizzle-orm";
+var update_screen_rpc_default = defineRpc17({
+  params: a17.object("UpdateScreenParams", {
+    id: a17.string(),
+    content: a17.string()
+  }),
+  response: a17.object("UpdateScreenResponse", {
+    success: a17.boolean(),
+    updatedAt: a17.timestamp()
+  }),
+  handler: async ({ params }) => {
+    const db2 = getDrizzle();
+    const [updatedScreen] = await db2.update(screens).set({
+      content: params.content,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq6(screens.id, params.id)).returning();
+    if (!updatedScreen) {
+      throw new Error(`Screen with ID ${params.id} not found`);
+    }
+    return {
+      success: true,
+      updatedAt: updatedScreen.updatedAt
+    };
+  }
+});
+
+// src/procedures/svg/get_svgs.rpc.ts
+import { a as a18 } from "@arrirpc/schema";
+import { defineRpc as defineRpc18 } from "@arrirpc/server";
+import { or, count, ilike, desc as desc3 } from "drizzle-orm";
+var get_svgs_rpc_default = defineRpc18({
+  params: a18.object("GetSvgsParams", {
+    limit: a18.int32(),
+    offset: a18.int32(),
+    search: a18.string()
+  }),
+  response: a18.object("GetSvgsResponse", {
+    success: a18.boolean(),
+    message: a18.string(),
+    total: a18.int32(),
+    svgs: a18.array(
+      a18.object("SvgInfo", {
+        id: a18.string(),
+        name: a18.string(),
+        svg: a18.string(),
+        type: a18.string()
+      })
+    )
+  }),
+  async handler({ params }) {
+    const { limit, offset, search } = params;
     console.log(`[get_svgs] params: limit=${limit}, offset=${offset}, search=${search}`);
     try {
       const db2 = getDrizzle();
@@ -2077,7 +2377,7 @@ var get_svgs_rpc_default = defineRpc12({
       }
       const totalResult = await countQuery;
       const total = totalResult[0]?.count || 0;
-      const results = await query.limit(pageSize).offset(pageOffset).orderBy(desc2(svgs.createdAt), desc2(svgs.id));
+      const results = await query.limit(pageSize).offset(pageOffset).orderBy(desc3(svgs.createdAt), desc3(svgs.id));
       return {
         success: true,
         message: "Fetched SVGs successfully",
@@ -2110,10 +2410,16 @@ app_default.rpc("admin.get_types", get_types_rpc_default);
 app_default.rpc("admin.save_type_code", save_type_code_rpc_default);
 app_default.rpc("admin.update_component", update_component_rpc_default);
 app_default.rpc("admin.update_type_definition", update_type_definition_rpc_default);
+app_default.rpc("ai.edit_image", edit_image_rpc_default);
 app_default.rpc("ai.generate_design", generate_design_rpc_default);
 app_default.rpc("ai.generate_image", generate_image_rpc_default);
+app_default.rpc("ai.generate_with_preview", generate_with_preview_rpc_default);
 app_default.rpc("ai.inpaint_image", inpaint_image_rpc_default);
 app_default.rpc("ai.iterate_design", iterate_design_rpc_default);
+app_default.rpc("screens.create_screen", create_screen_rpc_default);
+app_default.rpc("screens.delete_screen", delete_screen_rpc_default);
+app_default.rpc("screens.get_screens", get_screens_rpc_default);
+app_default.rpc("screens.update_screen", update_screen_rpc_default);
 app_default.rpc("svg.get_svgs", get_svgs_rpc_default);
 var arri_app_default = app_default;
 export {

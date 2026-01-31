@@ -46,6 +46,13 @@ class ImageProperties {
         group: 'Image',
         onAction: _dummyAction,
       ),
+      const StringProperty(
+        key: 'imagePrompt',
+        displayName: 'AI Image Prompt',
+        value: '',
+        group: 'Image',
+        enable: Enabled(show: true, enabled: true),
+      ),
     ]);
   }
 
@@ -53,6 +60,8 @@ class ImageProperties {
 
   static Map<String, String? Function(dynamic)> get validators => {
     'source': (value) => value is String ? null : 'source must be a string',
+    'imagePrompt': (value) =>
+        value is String ? null : 'imagePrompt must be a string',
     'width': (value) => value is num ? null : 'width must be a number',
     'height': (value) => value is num ? null : 'height must be a number',
     'borderRadius': (value) =>

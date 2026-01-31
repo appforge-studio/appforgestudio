@@ -232,8 +232,8 @@ class ComponentColorProperty extends Property {
     'value': _value.value,
     'type': _value.type.index,
     'stops': _value.stops,
-    'begin': _value.begin,
-    'end': _value.end,
+    'begin': {'x': _value.begin.x, 'y': _value.begin.y},
+    'end': {'x': _value.end.x, 'y': _value.end.y},
     'enable': enable.toJson(),
     'group': group,
   };
@@ -275,6 +275,19 @@ class ComponentColorProperty extends Property {
         stops = (jsonValue['stops'] as List)
             .map((e) => (e as num).toDouble())
             .toList();
+      }
+
+      if (jsonValue['begin'] is Map) {
+        final b = jsonValue['begin'];
+        begin = Alignment(
+          (b['x'] as num).toDouble(),
+          (b['y'] as num).toDouble(),
+        );
+      }
+
+      if (jsonValue['end'] is Map) {
+        final e = jsonValue['end'];
+        end = Alignment((e['x'] as num).toDouble(), (e['y'] as num).toDouble());
       }
 
       val = XDColor(

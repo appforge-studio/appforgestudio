@@ -6,6 +6,7 @@ export default defineRpc({
     params: a.object({
         sessionId: a.string(),
         prompt: a.string(),
+        apiKey: a.optional(a.string()),
     }),
     response: a.object({
         success: a.boolean(),
@@ -14,7 +15,7 @@ export default defineRpc({
     }),
     handler: async ({ params }) => {
         try {
-            const resultJson = await AiService.iterateDesign(params.sessionId, params.prompt);
+            const resultJson = await AiService.iterateDesign(params.sessionId, params.prompt, params.apiKey);
             return {
                 success: true,
                 message: "",

@@ -11,7 +11,7 @@ class TextProperties {
         displayName: 'Content',
         value: 'Sample Text',
         group: 'Text',
-        enable: Enabled(show: true, enabled: true),
+        enable: Enabled(show: false, enabled: true),
       ),
       const NumberProperty(
         key: 'fontSize',

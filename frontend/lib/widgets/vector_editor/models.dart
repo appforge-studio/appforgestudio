@@ -6,6 +6,7 @@ class PathNode {
   Offset handleIn;
   Offset handleOut;
   bool isCurve;
+  bool isMove;
 
   PathNode({
     required this.id,
@@ -13,6 +14,7 @@ class PathNode {
     required this.handleIn,
     required this.handleOut,
     required this.isCurve,
+    this.isMove = false,
   });
 
   PathNode copyWith({
@@ -21,6 +23,7 @@ class PathNode {
     Offset? handleIn,
     Offset? handleOut,
     bool? isCurve,
+    bool? isMove,
   }) {
     return PathNode(
       id: id ?? this.id,
@@ -28,6 +31,7 @@ class PathNode {
       handleIn: handleIn ?? this.handleIn,
       handleOut: handleOut ?? this.handleOut,
       isCurve: isCurve ?? this.isCurve,
+      isMove: isMove ?? this.isMove,
     );
   }
 }

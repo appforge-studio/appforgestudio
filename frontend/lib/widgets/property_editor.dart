@@ -5,7 +5,7 @@ import '../utilities/pallet.dart';
 
 import '../models/common_property.dart';
 import '../models/component_properties.dart';
-import 'inpainting_dialog.dart';
+import 'image_editing_dialog.dart';
 import 'property_text_field.dart';
 
 import 'property_color_field.dart';
@@ -109,6 +109,7 @@ class GenericPropertyEditor extends StatelessWidget {
       'shadowX',
       'shadowY',
       'backgroundBlurOpacity',
+      'imagePrompt',
     ];
 
     final availableProperties = properties.properties.where((p) {
@@ -507,7 +508,8 @@ class GenericPropertyEditor extends StatelessWidget {
     final height = properties.getProperty<double>('height') ?? 150.0;
 
     final newUrl = await Get.dialog<String>(
-      InpaintingDialog(imageUrl: source, width: width, height: height),
+      ImageEditingDialog(imageUrl: source, width: width, height: height),
+      barrierDismissible: false,
     );
 
     if (newUrl != null) {

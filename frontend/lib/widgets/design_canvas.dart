@@ -15,10 +15,12 @@ import '../components/component_factory.dart';
 import '../utilities/component_dimensions.dart';
 import 'component_overlay_layer.dart';
 import '../utilities/component_overlay_manager.dart';
+import 'alignment_guides_layer.dart';
 import 'box_selection_overlay.dart';
 import 'image_generator_dialog.dart';
 import 'vector_editor/vector_editor.dart';
 import '../models/types/color.dart';
+
 class DesignCanvas extends StatefulWidget {
   const DesignCanvas({super.key});
 
@@ -50,9 +52,25 @@ class _DesignCanvasState extends State<DesignCanvas> {
       autofocus: true,
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent) {
+          final isCtrlOrCmd =
+              HardwareKeyboard.instance.isControlPressed ||
+              HardwareKeyboard.instance.isMetaPressed;
+
           if (event.logicalKey == LogicalKeyboardKey.delete ||
               event.logicalKey == LogicalKeyboardKey.backspace) {
             canvasController.deleteSelectedComponents();
+            return KeyEventResult.handled;
+          } else if (isCtrlOrCmd &&
+              event.logicalKey == LogicalKeyboardKey.keyC) {
+            canvasController.copySelection();
+            return KeyEventResult.handled;
+          } else if (isCtrlOrCmd &&
+              event.logicalKey == LogicalKeyboardKey.keyX) {
+            canvasController.cutSelection();
+            return KeyEventResult.handled;
+          } else if (isCtrlOrCmd &&
+              event.logicalKey == LogicalKeyboardKey.keyV) {
+            canvasController.pasteFromClipboard();
             return KeyEventResult.handled;
           }
         }
@@ -417,8 +435,8 @@ class _DesignCanvasState extends State<DesignCanvas> {
                                               );
 
                                               final genResult = await client.ai
-                                                  .generate_image(
-                                                    GenerateImageParams(
+                                                  .generate_with_preview(
+                                                    GenerateWithPreviewParams(
                                                       prompt: prompt,
                                                       steps: steps,
                                                       width: width,
@@ -589,6 +607,11 @@ class _DesignCanvasState extends State<DesignCanvas> {
                                           );
                                         }),
 
+                                        // Alignment Guides Layer (Below overlay, above components)
+                                        AlignmentGuidesLayer(
+                                          canvasSize: canvasSize,
+                                        ),
+
                                         // Overlay layer for all interactions (dragging, resizing, selection)
                                         ComponentOverlayLayer(
                                           canvasSize: canvasSize,
@@ -640,78 +663,108 @@ class _DesignCanvasState extends State<DesignCanvas> {
   Widget _buildVisualComponentWidget(ComponentModel component) {
     final width = ComponentDimensions.getWidth(component);
     final height = ComponentDimensions.getHeight(component);
-    final canvasController = Get.find<CanvasController>();
+
+    // Pre-build the component widget to cache it during drag operations
+    final cachedChildWidget = _renderComponent(component);
 
     return Positioned(
       left: component.x,
       top: component.y,
       child: MeasuredWidget(
         componentId: component.id,
-        child: Obx(() {
-          final interaction = canvasController.getInteractionState(
-            component.id,
-          );
+        child: GetBuilder<CanvasController>(
+          id: 'overlay_${component.id}',
+          builder: (controller) {
+            final interaction = controller.getInteractionState(component.id);
 
-          double dx = 0;
-          double dy = 0;
-          double currentWidth = width ?? 0.0;
-          double currentHeight = height ?? 0.0;
+            double dx = 0;
+            double dy = 0;
+            double currentWidth = width ?? 0.0;
+            double currentHeight = height ?? 0.0;
 
-          if (interaction != null) {
-            if (interaction.position != null) {
-              dx = interaction.position!.dx - component.x;
-              dy = interaction.position!.dy - component.y;
+            if (interaction != null) {
+              if (interaction.position != null) {
+                dx = interaction.position!.dx - component.x;
+                dy = interaction.position!.dy - component.y;
+              }
+              if (interaction.size != null) {
+                currentWidth = interaction.size!.width;
+                currentHeight = interaction.size!.height;
+              }
             }
-            if (interaction.size != null) {
-              currentWidth = interaction.size!.width;
-              currentHeight = interaction.size!.height;
-            }
-          }
 
-          // ** Vector Editor Logic **
-          if (canvasController.isEditingComponent && 
-              canvasController.editingComponentId == component.id && 
-              component.type == ComponentType.icon) {
-                
-                // Use detected size if no explicit size
-                final renderWidth = currentWidth > 0 ? currentWidth : (component.detectedSize?.width ?? 100.0);
-                final renderHeight = currentHeight > 0 ? currentHeight : (component.detectedSize?.height ?? 100.0);
+            // ** Vector Editor Logic **
+            if (controller.isEditingComponent &&
+                controller.editingComponentId == component.id &&
+                component.type == ComponentType.icon) {
+              // Use detected size if no explicit size
+              final renderWidth = currentWidth > 0
+                  ? currentWidth
+                  : (component.detectedSize?.width ?? 100.0);
+              final renderHeight = currentHeight > 0
+                  ? currentHeight
+                  : (component.detectedSize?.height ?? 100.0);
 
-                return Transform.translate(
-                   offset: Offset(dx, dy),
-                   child: SizedBox(
-                      width: renderWidth,
-                      height: renderHeight,
+              // Padding to ensure the editor has space for handles without shrinking the icon content
+              const double editorPadding = 20.0;
+              final double fullWidth = renderWidth + (editorPadding * 2);
+              final double fullHeight = renderHeight + (editorPadding * 2);
+
+              return ValueListenableBuilder(
+                valueListenable: _transformationController,
+                builder: (context, matrix, child) {
+                  final scale = matrix.getMaxScaleOnAxis();
+
+                  // Translate entire editor back by padding so content aligns with original component
+                  // Plus existing offset (dx, dy)
+                  return Transform.translate(
+                    offset: Offset(dx - editorPadding, dy - editorPadding),
+                    child: SizedBox(
+                      width: fullWidth,
+                      height: fullHeight,
                       child: VectorEditor(
-                          width: renderWidth,
-                          height: renderHeight,
-                          color: (component.properties.getProperty('color') as XDColor?)?.toColor() ?? Colors.black,
-                          pathData: component.properties.getProperty('icon') ?? '',
-                          onPathChanged: (newPath) {
-                              final updatedProps = component.properties.updateProperty('icon', newPath);
-                              canvasController.updateComponent(component.copyWith(properties: updatedProps));
-                          },
-                          onClose: () => canvasController.setEditingComponent(null),
-                      )
-                   )
-                );
-          }
+                        width: fullWidth,
+                        height: fullHeight,
+                        padding: editorPadding,
+                        color:
+                            (component.properties.getProperty('color')
+                                    as XDColor?)
+                                ?.toColor() ??
+                            Colors.black,
+                        pathData:
+                            component.properties.getProperty('icon') ?? '',
+                        canvasScale: scale,
+                        onPathChanged: (newPath) {
+                          final updatedProps = component.properties
+                              .updateProperty('icon', newPath);
+                          controller.updateComponent(
+                            component.copyWith(properties: updatedProps),
+                          );
+                        },
+                        onClose: () => controller.setEditingComponent(null),
+                      ),
+                    ),
+                  );
+                },
+              );
+            }
 
-          Widget childWidget = _renderComponent(component);
+            Widget childWidget = cachedChildWidget;
 
-          if (currentWidth > 0 || currentHeight > 0) {
-            childWidget = SizedBox(
-              width: currentWidth > 0 ? currentWidth : null,
-              height: currentHeight > 0 ? currentHeight : null,
+            if (currentWidth > 0 || currentHeight > 0) {
+              childWidget = SizedBox(
+                width: currentWidth > 0 ? currentWidth : null,
+                height: currentHeight > 0 ? currentHeight : null,
+                child: childWidget,
+              );
+            }
+
+            return Transform.translate(
+              offset: Offset(dx, dy),
               child: childWidget,
             );
-          }
-
-          return Transform.translate(
-            offset: Offset(dx, dy),
-            child: childWidget,
-          );
-        }),
+          },
+        ),
       ),
     );
   }

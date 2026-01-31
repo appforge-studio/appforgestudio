@@ -46,109 +46,25 @@ class ComponentOverlayManager {
     }
   }
 
-  /// Build complete overlay for a single component
   static Widget buildComponentOverlay({
     required ComponentModel component,
     required CanvasController controller,
     required Size canvasSize,
   }) {
+    // Base dimensions
+    final baseWidth = ComponentDimensions.getWidth(component);
+    final baseHeight = ComponentDimensions.getHeight(component);
+
     return Positioned(
       left: component.x,
       top: component.y,
-      child: Obx(() {
-        final isSelected = controller.selectedComponentIds.contains(
-          component.id,
-        );
-        final isDragging =
-            controller.isDraggingComponent &&
-            controller.draggingComponentId == component.id;
-        final isResizing =
-            controller.isResizingComponent &&
-            controller.resizingComponentId == component.id;
-        final isEditing = controller.isEditingComponent && 
-            controller.editingComponentId == component.id;
-            
-        if (isEditing) return const SizedBox.shrink();
-
-        // Interaction state
-        final interaction = controller.getInteractionState(component.id);
-
-        double dx = 0;
-        double dy = 0;
-
-        // Base dimensions
-        final baseWidth = ComponentDimensions.getWidth(component);
-        final baseHeight = ComponentDimensions.getHeight(component);
-
-        double componentWidth =
-            baseWidth ?? component.detectedSize?.width ?? 0.0;
-        double componentHeight =
-            baseHeight ?? component.detectedSize?.height ?? 0.0;
-
-        // Apply transient updates
-        if (interaction != null) {
-          if (interaction.position != null) {
-            dx = interaction.position!.dx - component.x;
-            dy = interaction.position!.dy - component.y;
-          }
-          if (interaction.size != null) {
-            componentWidth = interaction.size!.width;
-            componentHeight = interaction.size!.height;
-          }
-        }
-
-        return Transform.translate(
-          offset: Offset(dx, dy),
-          child: SizedBox(
-            width: componentWidth,
-            height: componentHeight,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Main interaction area
-                _buildMainInteractionArea(
-                  component: component,
-                  controller: controller,
-                  canvasSize: canvasSize,
-                  width: componentWidth,
-                  height: componentHeight,
-                  isDragging: isDragging,
-                  isResizing: isResizing,
-                ),
-
-                // Selection indicator
-                if (isSelected)
-                  _buildSelectionIndicator(
-                    isDragging: isDragging,
-                    isResizing: isResizing,
-                    component: component,
-                    controller: controller,
-                    width: componentWidth,
-                    height: componentHeight,
-                  ),
-
-                // Edge detection zones (invisible, for cursor feedback) - Must persist during resize!
-                if (component.resizable && !isDragging)
-                  ..._buildEdgeDetectionZones(
-                    component: component,
-                    controller: controller,
-                    width: componentWidth,
-                    height: componentHeight,
-                  ),
-
-                // Resize handles (visible when selected) - Draw on top!
-                if (isSelected && component.resizable && !isDragging)
-                  ..._buildResizeHandles(
-                    component: component,
-                    controller: controller,
-                    width: componentWidth,
-                    height: componentHeight,
-                  ),
-              ],
-            ),
-          ),
-        );
-      }),
+      child: _ComponentOverlay(
+        component: component,
+        controller: controller,
+        canvasSize: canvasSize,
+        baseWidth: baseWidth ?? component.detectedSize?.width ?? 0.0,
+        baseHeight: baseHeight ?? component.detectedSize?.height ?? 0.0,
+      ),
     );
   }
 
@@ -185,7 +101,7 @@ class ComponentOverlayManager {
           },
           onDoubleTap: () {
             if (component.type == ComponentType.icon) {
-               controller.setEditingComponent(component.id);
+              controller.setEditingComponent(component.id);
             }
           },
           onSecondaryTapDown: (details) {
@@ -238,27 +154,33 @@ class ComponentOverlayManager {
     required CanvasController controller,
     required double width,
     required double height,
+    required bool isSelected,
   }) {
+    // Determine border color/style based on selection state
+    final borderColor = isSelected
+        ? selectionColor
+        : selectionColor.withValues(alpha: 0.5);
+    final borderWidth = isDragging || isResizing ? 3.0 : 2.0;
+
     return Positioned.fill(
       child: Stack(
         children: [
           // Visual border (non-interactive)
           IgnorePointer(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+            child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
                   color: isDragging || isResizing
                       ? selectionColor.withValues(alpha: 0.8)
-                      : selectionColor,
-                  width: isDragging || isResizing ? 3.0 : 2.0,
+                      : borderColor,
+                  width: borderWidth,
                 ),
                 borderRadius: BorderRadius.circular(4.0),
               ),
             ),
           ),
-          // Interactive border zones for resizing
-          if (component.resizable && !isDragging)
+          // Interactive border zones for resizing (ONLY when selected)
+          if (isSelected && component.resizable && !isDragging)
             ..._buildBorderResizeZones(
               component: component,
               controller: controller,
@@ -371,11 +293,6 @@ class ComponentOverlayManager {
     String componentId,
     Key key,
   ) {
-    final isActiveHandle =
-        controller.isResizingComponent &&
-        controller.resizingComponentId == componentId &&
-        controller.resizeHandle == handle;
-
     return Positioned(
       key: key,
       left: left,
@@ -482,41 +399,15 @@ class ComponentOverlayManager {
     required double width,
     required double height,
   }) {
-    // Iterate over ALL selected components
-    for (final id in controller.selectedComponentIds) {
-      final currentComponent = controller.getComponentById(id);
-      if (currentComponent == null) continue;
+    // We only drive the movement via the "primary" component being dragged (the one receiving the gesture)
+    // The controller matches relative movement for others.
 
-      // Check for transient state first, fallback to stable state
-      final interaction = controller.getInteractionState(id);
-      final currentX = interaction?.position?.dx ?? currentComponent.x;
-      final currentY = interaction?.position?.dy ?? currentComponent.y;
-
-      // Determine dimensions for clamping
-      final compWidth =
-          interaction?.size?.width ??
-          ComponentDimensions.getWidth(currentComponent) ??
-          currentComponent.detectedSize?.width ??
-          0.0;
-      final compHeight =
-          interaction?.size?.height ??
-          ComponentDimensions.getHeight(currentComponent) ??
-          currentComponent.detectedSize?.height ??
-          0.0;
-
-      // Calculate new position with boundary constraints using CURRENT position
-      final newX = (currentX + details.delta.dx).clamp(
-        0.0,
-        canvasSize.width - compWidth,
-      );
-      final newY = (currentY + details.delta.dy).clamp(
-        0.0,
-        canvasSize.height - compHeight,
-      );
-
-      // Update transient state
-      controller.updateInteraction(id, position: Offset(newX, newY));
-    }
+    // Pass the raw delta to the controller, let it handle snapping and updating ALL selected components.
+    controller.moveComponentWithSnapping(
+      component.id,
+      details.delta.dx,
+      details.delta.dy,
+    );
   }
 
   static void _handleDragEnd(
@@ -529,6 +420,7 @@ class ComponentOverlayManager {
       controller.commitInteraction(id);
     }
     controller.setDragState(componentId, false);
+    controller.clearGuides(); // Clear guides on end
   }
 
   // Resize handlers
@@ -698,6 +590,125 @@ class ComponentOverlayManager {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ComponentOverlay extends StatelessWidget {
+  final ComponentModel component;
+  final CanvasController controller;
+  final Size canvasSize;
+  final double baseWidth;
+  final double baseHeight;
+
+  const _ComponentOverlay({
+    required this.component,
+    required this.controller,
+    required this.canvasSize,
+    required this.baseWidth,
+    required this.baseHeight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GetBuilder<CanvasController>(
+      id: 'overlay_${component.id}',
+      builder: (_) {
+        final isSelected = controller.selectedComponentIds.contains(
+          component.id,
+        );
+        final isDragging =
+            controller.isDraggingComponent &&
+            controller.draggingComponentId == component.id;
+        final isResizing =
+            controller.isResizingComponent &&
+            controller.resizingComponentId == component.id;
+        final isEditing =
+            controller.isEditingComponent &&
+            controller.editingComponentId == component.id;
+
+        if (isEditing) return const SizedBox.shrink();
+
+        // Interaction state
+        final interaction = controller.getInteractionState(component.id);
+
+        double dx = 0;
+        double dy = 0;
+        double componentWidth = baseWidth;
+        double componentHeight = baseHeight;
+
+        // Apply transient updates
+        if (interaction != null) {
+          if (interaction.position != null) {
+            dx = interaction.position!.dx - component.x;
+            dy = interaction.position!.dy - component.y;
+          }
+          if (interaction.size != null) {
+            componentWidth = interaction.size!.width;
+            componentHeight = interaction.size!.height;
+          }
+        }
+
+        final isHovered = controller.hoveredComponentId == component.id;
+
+        return Transform.translate(
+          offset: Offset(dx, dy),
+          child: MouseRegion(
+            onEnter: (_) => controller.setHoveredComponent(component.id),
+            onExit: (_) => controller.setHoveredComponent(null),
+            child: SizedBox(
+              width: componentWidth,
+              height: componentHeight,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Main interaction area
+                  ComponentOverlayManager._buildMainInteractionArea(
+                    component: component,
+                    controller: controller,
+                    canvasSize: canvasSize,
+                    width: componentWidth,
+                    height: componentHeight,
+                    isDragging: isDragging,
+                    isResizing: isResizing,
+                  ),
+
+                  // Selection indicator (Show if Selected OR Hovered)
+                  if (isSelected || isHovered)
+                    ComponentOverlayManager._buildSelectionIndicator(
+                      isDragging: isDragging,
+                      isResizing: isResizing,
+                      component: component,
+                      controller: controller,
+                      width: componentWidth,
+                      height: componentHeight,
+                      isSelected: isSelected, // Pass selection state
+                    ),
+
+                  // Edge detection zones (invisible, for cursor feedback) - Must persist during resize!
+                  // Show these ONLY when selected to avoid cursor changing on just hover
+                  if (isSelected && component.resizable && !isDragging)
+                    ...ComponentOverlayManager._buildEdgeDetectionZones(
+                      component: component,
+                      controller: controller,
+                      width: componentWidth,
+                      height: componentHeight,
+                    ),
+
+                  // Resize handles (visible when selected) - Draw on top!
+                  if (isSelected && component.resizable && !isDragging)
+                    ...ComponentOverlayManager._buildResizeHandles(
+                      component: component,
+                      controller: controller,
+                      width: componentWidth,
+                      height: componentHeight,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

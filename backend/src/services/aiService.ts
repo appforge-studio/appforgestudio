@@ -11,14 +11,36 @@ import { ulid } from "ulidx";
 export class AiService {
   private static genAI = new GoogleGenerativeAI(env.GOOGLE_STUDIO_API_KEY || '');
 
-  static async generateDesign(prompt: string, sessionId?: string, isIteration: boolean = false): Promise<any> {
-    const model = this.genAI.getGenerativeModel({
-      model: "gemini-flash-latest",
-      generationConfig: {
-        responseMimeType: "application/json",
-      }
-    });
+  static async generateDesign(prompt: string, sessionId?: string, isIteration: boolean = false, apiKey?: string): Promise<any> {
     const db = getDrizzle();
+    const modelName = "gemini-flash-latest";
+
+    // Initialize AI client (use provided key or fallback to default)
+    const client = apiKey
+      ? new GoogleGenerativeAI(apiKey)
+      : this.genAI;
+
+    // 1. Check Cache (Only for non-iterations)
+    if (!isIteration) {
+      try {
+        const cached = await db.select()
+          .from(aiDesignCache)
+          .where(eq(aiDesignCache.prompt, prompt))
+          .limit(1);
+
+        if (cached && cached.length > 0) {
+          const entry = cached[0];
+          if (entry) {
+            console.log("🚀 Cache HIT for prompt:", prompt);
+            return JSON.parse(entry.designJson);
+          }
+        }
+        console.log("🌑 Cache MISS for prompt:", prompt);
+      } catch (e) {
+        console.error("⚠️ Cache lookup error:", e);
+      }
+    }
+
     const allComponents = await db.select().from(components);
     const allSvgs = await db.select({ name: svgs.name }).from(svgs);
 
@@ -43,13 +65,37 @@ export class AiService {
           case 'icon': typeDesc = 'string (Material Icon name)'; break;
           default: typeDesc = 'any';
         }
-        // MODIFIED: Request simple value directly instead of { value, enable } object
         return `"${p.name}": ${typeDesc}`;
       }).join(',\n        ');
 
       return `// PROPERTIES FOR "${comp.name}"\n        ${propLines}`;
     }).join('\n\n        ');
 
+    // --- STEP 1: GENERATE DESIGN PLAN ---
+    console.log("🎨 STEP 1: Generating Design Plan...");
+    const planModel = client.getGenerativeModel({ model: modelName });
+    const planPrompt = `
+    You are an expert UI/UX designer. Your task is to create a detailed design plan for a Flutter application based on the user's request.
+    
+    USER REQUEST: "${prompt}"
+    
+    AVAILABLE COMPONENTS: [${allComponents.map(c => c.name).join(', ')}]
+    
+    In your plan, describe:
+    1. The overall layout and structure.
+    2. Which components you will use and why.
+    3. The positioning (x, y) and sizing of these components.
+    4. The color palette and specific property values for each component.
+    5. How the design fulfills the user's request.
+    
+    OUTPUT: A detailed textual description of the design.
+    `;
+
+    const planResult = await planModel.generateContent(planPrompt);
+    const designPlan = planResult.response.text();
+    console.log("✅ Design Plan Generated:\n", designPlan);
+
+    // --- STEP 2: GENERATE JSON FROM PLAN ---
     const schemaDescription = `
     You are a UI design generator. Output strictly valid JSON matching this schema for a Flutter app design canvas.
     
@@ -62,7 +108,7 @@ export class AiService {
       "isPropertyEditorVisible": false
     }
 
-    COMPONENT OBJECT:
+    PROPERTIES:
     {
       "id": "unique_string_id",
       "type": ${componentTypesList},
@@ -82,65 +128,70 @@ export class AiService {
     2. All properties MUST be simple direct values (string, number, boolean, or hex string for colors).
     3. Colors MUST be Hex strings (e.g. "#FF0000" or "#AARRGGBB").
     4. For any "icon" property, you MUST use ONLY one of these valid names: [${svgNamesList}].
-    5. Generate a complete, beautiful design based on the user prompt: "${prompt}".
-    6. Ensure components are positioned logically.
+    5. For any "image" component:
+       - You MUST provide a detailed "imagePrompt" string describing what the image should look like.
+       - You MUST set the "image" property to "https://placehold.co/600x400?text=Image+Generating...". DO NOT put the prompt in the "image" property.
+    6. Strictly follow the DESIGN PLAN provided below.
     `;
 
-    let currentPrompt = schemaDescription;
+    const jsonModel = client.getGenerativeModel({
+      model: modelName,
+      generationConfig: { responseMimeType: "application/json" }
+    });
+
+    let currentPrompt = `
+    DESIGN PLAN:
+    ${designPlan}
+
+    JSON SCHEMA & RULES:
+    ${schemaDescription}
+    
+    Based on the DESIGN PLAN, generate the final valid JSON.
+    `;
+
     let attempts = 0;
     const maxAttempts = 3;
-    const modelName = "gemini-flash-latest";
-    // 1. Check Cache (Only for non-iterations)
-    if (!isIteration) {
-      try {
-        const cached = await db.select()
-          .from(aiDesignCache)
-          .where(eq(aiDesignCache.prompt, prompt))
-          .limit(1);
-
-        if (cached && cached.length > 0) {
-          const entry = cached[0];
-          if (entry) {
-            console.log("🚀 Cache HIT for prompt:", prompt);
-            return JSON.parse(entry.designJson);
-          }
-        }
-        console.log("🌑 Cache MISS for prompt:", prompt);
-      } catch (e) {
-        console.error("⚠️ Cache lookup error:", e);
-      }
-    }
-
-    console.log("----------------------------------------------------------------");
-    console.log("🤖 GENERATED AI PROMPT:");
-    console.log(currentPrompt);
-    console.log("----------------------------------------------------------------");
 
     while (attempts < maxAttempts) {
       try {
-        console.log(`🤖 AI Generation Attempt ${attempts + 1}/${maxAttempts}`);
-        console.log("⏳ Waiting for Gemini API response...");
-        const result = await model.generateContent(currentPrompt);
-        console.log("✅ Received response from Gemini API");
-
-        console.log("⏳ Extracting text from response...");
+        console.log(`🤖 AI JSON Generation Attempt ${attempts + 1}/${maxAttempts}`);
+        const result = await jsonModel.generateContent(currentPrompt);
         const responseText = result.response.text();
-        console.log("✅ Text extracted");
 
         let json: any;
         try {
-          console.log("⏳ Parsing JSON...");
           json = JSON.parse(responseText);
-          console.log("✅ JSON parsed successfully");
         } catch (e) {
           console.error("❌ Failed to parse JSON:", responseText);
           throw new Error("Invalid JSON returned by AI");
         }
 
-        // basic validation
         const errors = this.validateDesignJson(json);
         if (errors.length === 0) {
-          // 2. Save to Cache (ONLY for initial prompts, NOT for iterations or fixing prompts)
+          // --- HYDRATION STEP: INJECT SVG CONTENT ---
+          const svgContentMap = new Map<string, string>();
+          const allSvgsFull = await db.select({ name: svgs.name, svg: svgs.svg }).from(svgs);
+          for (const s of allSvgsFull) {
+            svgContentMap.set(s.name, s.svg);
+          }
+
+          json.components.forEach((comp: any) => {
+            if (comp.properties && comp.properties.icon) {
+              const iconName = comp.properties.icon;
+              if (svgContentMap.has(iconName)) {
+                console.log(`✨ Injecting SVG content for icon "${iconName}"`);
+                comp.properties.icon = svgContentMap.get(iconName);
+              } else {
+                // Fallback: Check if it's already an SVG (starts with <svg)
+                if (!iconName.trim().startsWith('<svg')) {
+                  console.warn(`⚠️ Icon "${iconName}" not found in database and is not an SVG string.`);
+                  // Optional: Set a default icon or leave it (frontend might break)
+                }
+              }
+            }
+          });
+
+          // Cache and Record Session
           if (!isIteration && attempts === 0) {
             try {
               await db.insert(aiDesignCache).values({
@@ -152,32 +203,21 @@ export class AiService {
                 target: aiDesignCache.prompt,
                 set: { designJson: JSON.stringify(json), modelUsed: modelName }
               });
-              console.log("✅ Saved to cache (initial successful attempt)");
+              console.log("✅ Saved to cache");
             } catch (e) {
               console.error("⚠️ Failed to save to cache:", e);
             }
-          } else if (attempts > 0) {
-            console.log("ℹ️ Skipping cache save for fixing prompt (attempt > 0)");
-          } else if (isIteration) {
-            console.log("ℹ️ Skipping cache save for iteration prompt");
           }
 
-          // 3. Record in Session if provided
           if (sessionId) {
             try {
-              const db = getDrizzle();
-              // Ensure session exists
               await db.insert(aiDesignSessions).values({ id: sessionId }).onConflictDoNothing();
-
-              // Record user prompt
               await db.insert(aiDesignMessages).values({
                 id: ulid(),
                 sessionId: sessionId,
                 role: 'user',
                 content: prompt,
               });
-
-              // Record AI response
               await db.insert(aiDesignMessages).values({
                 id: ulid(),
                 sessionId: sessionId,
@@ -194,12 +234,11 @@ export class AiService {
         }
 
         console.warn("⚠️ Validation Errors:", errors);
-
-        // Add errors to prompt and retry
         currentPrompt = `
         The previous JSON had the following errors:\n${errors.join('\n')}\n
-        Please fix these errors and return the valid JSON again.
-        Original Prompt: ${schemaDescription}
+        Please fix these errors and return the valid JSON again based on the DESIGN PLAN.
+        DESIGN PLAN:
+        ${designPlan}
         `;
 
         attempts++;
@@ -207,7 +246,6 @@ export class AiService {
         console.error("❌ AI Generation Error:", error);
         attempts++;
         if (attempts < maxAttempts) {
-          console.log("Waiting 5 seconds before retry...");
           await new Promise(resolve => setTimeout(resolve, 5000));
         }
       }
@@ -216,7 +254,8 @@ export class AiService {
     throw new Error("Failed to generate valid design after multiple attempts");
   }
 
-  static async iterateDesign(sessionId: string, prompt: string): Promise<any> {
+
+  static async iterateDesign(sessionId: string, prompt: string, apiKey?: string): Promise<any> {
     const db = getDrizzle();
 
     // 1. Fetch History
@@ -227,7 +266,7 @@ export class AiService {
 
     if (history.length === 0) {
       // If no history, just do a normal generation (which will be cached)
-      return this.generateDesign(prompt, sessionId, false);
+      return this.generateDesign(prompt, sessionId, false, apiKey);
     }
 
     // 2. Find last design
@@ -253,7 +292,7 @@ export class AiService {
     `;
 
     // 4. Generate using context (passed as isIteration: true to avoid caching)
-    return this.generateDesign(contextPrompt, sessionId, true);
+    return this.generateDesign(contextPrompt, sessionId, true, apiKey);
   }
 
   static validateDesignJson(json: any): string[] {
@@ -280,15 +319,17 @@ export class AiService {
       if (typeof comp.x !== 'number') errors.push(`Component[${index}] invalid x`);
       if (typeof comp.y !== 'number') errors.push(`Component[${index}] invalid y`);
 
-      if (!comp.properties) {
-        errors.push(`Component[${index}] missing properties`);
-      } else {
-        // Auto-parse property values if they are strings that look like numbers
-        Object.keys(comp.properties).forEach(key => {
-          const val = comp.properties[key];
-          if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val)) && !val.startsWith('#')) {
-            // If it's a numeric string and not a color hex, attempt to parse it
-            comp.properties[key] = parseFloat(val);
+      // CASTING: Ensure properties that should be strings are strings
+      if (comp.id !== undefined && typeof comp.id !== 'string') {
+        comp.id = String(comp.id);
+      }
+
+      if (comp.properties) {
+        const stringProps = ['content', 'fontFamily', 'icon', 'text', 'label', 'hint', 'value', 'imagePrompt'];
+        stringProps.forEach(prop => {
+          if (comp.properties[prop] !== undefined && comp.properties[prop] !== null && typeof comp.properties[prop] !== 'string') {
+            console.log(`🪄 Casting property "${prop}" to string:`, comp.properties[prop]);
+            comp.properties[prop] = String(comp.properties[prop]);
           }
         });
       }

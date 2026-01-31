@@ -57,6 +57,51 @@ def get_history(prompt_id):
     with urllib.request.urlopen(f"http://{server_address}/history/{prompt_id}") as response:
         return json.loads(response.read())
 
+def optimize_resolution(width, height, target=1024):
+    """
+    Optimizes resolution for Z-Image models:
+    1. Scales up to target while maintaining aspect ratio if smaller.
+    2. Ensures width and height are multiples of 64.
+    """
+    try:
+        if not width or not height:
+            return 1024, 1024
+            
+        w = float(width)
+        h = float(height)
+        
+        # 1. Scale up to target if smaller
+        aspect_ratio = w / h
+        
+        if w >= h:
+            if w < target:
+                new_w = target
+                new_h = target / aspect_ratio
+            else:
+                new_w = w
+                new_h = h
+        else:
+            if h < target:
+                new_h = target
+                new_w = target * aspect_ratio
+            else:
+                new_w = w
+                new_h = h
+                
+        # 2. Align to nearest multiple of 64
+        final_w = int(round(new_w / 64) * 64)
+        final_h = int(round(new_h / 64) * 64)
+        
+        # Safety checks
+        if final_w < 64: final_w = 64
+        if final_h < 64: final_h = 64
+        
+        print(colored(f"📏 [Resolution] Optimized {width}x{height} -> {final_w}x{final_h}", "yellow"))
+        return final_w, final_h
+    except Exception as e:
+        print(colored(f"⚠️ [Resolution] Optimization error: {e}. Using defaults.", "red"))
+        return 1024, 1024
+
 # Get images from the workflow
 def get_images(ws, prompt, socket_id=None):
     prompt_response = queue_prompt(prompt)
@@ -244,8 +289,8 @@ def generate_images_iterative(positive_prompt, negative_prompt="", total_steps=4
     # Customizing Txt2Img
     workflow["42"]["inputs"]["text"] = positive_prompt
     workflow["41"]["inputs"]["steps"] = 1 # Force 1 step
-    workflow["45"]["inputs"]["width"] = resolution[0]
-    workflow["45"]["inputs"]["height"] = resolution[1]
+    workflow["45"]["inputs"]["width"] = int(resolution[0])
+    workflow["45"]["inputs"]["height"] = int(resolution[1])
     
     seed = random.randint(1, 1000000000)
     workflow["41"]["inputs"]["seed"] = seed
@@ -284,18 +329,17 @@ def generate_images_iterative(positive_prompt, negative_prompt="", total_steps=4
 
     # Only continue if we have more steps
     if total_steps > 1:
-        # Load Img2Img Workflow
+        # Load Edit Workflow for refinement
         try:
-            with open("img2img_workflow.json", "r", encoding="utf-8") as f:
-                img2img_workflow_template = json.load(f)
+            with open("edit_workflow.json", "r", encoding="utf-8") as f:
+                edit_workflow_template = json.load(f)
         except FileNotFoundError:
-            print(colored("img2img_workflow.json not found.", "red"))
+            print(colored("edit_workflow.json not found.", "red"))
             ws.close()
             return images_output, seed
 
         # Loop for refinement
         # We did 1 step (Txt2Img). Remaining: total_steps - 1.
-        # Denoise range: 0.8 -> 0.0 (approx)
         
         remaining_steps = total_steps - 1
         
@@ -317,39 +361,26 @@ def generate_images_iterative(positive_prompt, negative_prompt="", total_steps=4
             
             uploaded_filename = upload_resp.get("name") # ComfyUI might rename it
             
-            # 2. Configure Img2Img
-            workflow = img2img_workflow_template.copy() # Shallow copy might be enough
+            # 2. Configure Edit Workflow
+            workflow = edit_workflow_template.copy()
             
-            # Update Prompt
-            workflow["42"]["inputs"]["text"] = positive_prompt
+            # Update Node 75:74 (Positive Prompt)
+            if "75:74" in workflow and "inputs" in workflow["75:74"]:
+                workflow["75:74"]["inputs"]["text"] = positive_prompt
+                
+            # Update Node 76 (Load Image)
+            if "76" in workflow and "inputs" in workflow["76"]:
+                workflow["76"]["inputs"]["image"] = uploaded_filename
             
-            # Update Input Image
-            workflow["101"]["inputs"]["image"] = uploaded_filename
+            # Update Steps
+            if "75:62" in workflow:
+                workflow["75:62"]["inputs"]["steps"] = 1 # Keep it fast
             
-            # Update Steps (Request said "use 1 step" initially, maybe 1 step for refinement too?)
-            # Let's use 2 steps for refinement to be safe, or 1 if user wants speed.
-            # "each image step should be passed" implies we want to see change.
-            workflow["41"]["inputs"]["steps"] = 1 # Keep it fast
-            
-            # Calculate Denoise
-            # if remaining_steps = 1 (total 2), i=0. Denoise = 0.8?
-            # i ranges 0 to remaining_steps-1.
-            # We want start 0.8, end ~0.1
-            
-            if remaining_steps == 1:
-                denoise = 0.5 # Single refinement
-            else:
-                progress = i / (remaining_steps - 1)
-                # Linear interpolation: 0.8 -> 0.1
-                denoise = 0.8 - (0.7 * progress)
-            
-            # Ensure it's not 0
-            denoise = max(0.1, denoise)
-            
-            workflow["41"]["inputs"]["denoise"] = denoise
-            workflow["41"]["inputs"]["seed"] = random.randint(1, 1000000000)
+            # Set Seed (noise_seed)
+            if "75:73" in workflow:
+                workflow["75:73"]["inputs"]["noise_seed"] = random.randint(1, 1000000000)
 
-            print(colored(f"   Denoise: {denoise:.2f}", "yellow"))
+            print(colored(f"   Step {i+1} setup complete", "yellow"))
 
             # 3. Run Img2Img
             images_output = get_images(ws, workflow, socket_id)
@@ -635,11 +666,164 @@ def generate_inpaint_route():
         traceback.print_exc()
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-@app.route('/generate-image', methods=['POST'])
-def generate_image_route():
-    print("!!! [AI Server] RECEIVED REQUEST ON /generate-image !!!")
+# Edit image function
+def edit_image_logic(prompt, image_filename, steps=None):
+    # Establish WebSocket connection
+    ws = websocket.WebSocket()
+    ws_url = f"ws://{server_address}/ws?clientId={client_id}"
+    print(colored(f"Step 3: Establishing WebSocket connection to {ws_url}", "cyan"))
     try:
-        print(colored("🚀 [AI Server] Received request on /generate-image", "green", attrs=["bold"]))
+        ws.connect(ws_url)
+    except Exception as e:
+        print(colored(f"Failed to connect to WebSocket: {e}", "red"))
+        return None, None
+
+    # Load workflow from file
+    print(colored("Step 4: Loading the image editing workflow from 'edit_workflow.json'.", "cyan"))
+    try:
+        with open("edit_workflow.json", "r", encoding="utf-8") as f:
+            workflow_data = f.read()
+    except FileNotFoundError:
+        print(colored("edit_workflow.json not found.", "red"))
+        return None, None
+
+    workflow = json.loads(workflow_data)
+
+    # Customize workflow
+    print(colored("Step 5: Customizing the edit workflow with the provided inputs.", "cyan"))
+
+    # Update Node 75:74 (Positive Prompt)
+    if "75:74" in workflow and "inputs" in workflow["75:74"]:
+        workflow["75:74"]["inputs"]["text"] = prompt
+    
+    # Update Node 76 (Load Image)
+    if "76" in workflow and "inputs" in workflow["76"]:
+        workflow["76"]["inputs"]["image"] = image_filename
+    
+    # Update Node 75:73 (RandomNoise)
+    if "75:73" in workflow:
+        seed = random.randint(1, 1000000000)
+        print(colored(f"Setting random seed for generation: {seed}", "yellow"))
+        workflow["75:73"]["inputs"]["noise_seed"] = seed
+    else:
+        seed = 0
+        print(colored("Warning: RandomNoise node 75:73 not found.", "red"))
+
+    # Update Node 75:62 (Flux2Scheduler - Steps)
+    if steps is not None and "75:62" in workflow:
+        workflow["75:62"]["inputs"]["steps"] = steps
+
+    # Fetch generated images
+    images = get_images(ws, workflow)
+
+    # Close WebSocket connection
+    print(colored(f"Step 8: Closing WebSocket connection to {ws_url}", "cyan"))
+    ws.close()
+
+    return images, seed
+
+@app.route('/edit-image', methods=['POST'])
+def edit_image_route():
+    print("!!! [AI Server] RECEIVED REQUEST ON /edit-image !!!")
+    try:
+        print(colored("🚀 [AI Server] Received request on /edit-image", "green", attrs=["bold"]))
+        
+        image_data = None
+        image_filename = None
+
+        if request.is_json:
+            print(colored("📝 [AI Server] Processing JSON request", "cyan"))
+            data = request.json
+            prompt = data.get('prompt')
+            steps = data.get('steps')
+            
+            image_input = data.get('image')
+
+            if not image_input:
+                 print(colored("❌ [AI Server] Error: Image missing in JSON", "red"))
+                 return jsonify({"error": "Image is required"}), 400
+
+            # Process Image (URL or Base64)
+            try:
+                if image_input.startswith("http"):
+                    print(colored(f"⬇️ [AI Server] Downloading image from URL: {image_input}", "cyan"))
+                    img_resp = requests.get(image_input)
+                    if img_resp.status_code != 200:
+                         return jsonify({"error": "Failed to download image from URL"}), 400
+                    image_data = img_resp.content
+                else:
+                    if "," in image_input:
+                        image_input = image_input.split(",")[1]
+                    image_data = base64.b64decode(image_input)
+                
+                image_filename = f"image_{uuid.uuid4()}.png"
+                
+            except Exception as e:
+                print(colored(f"❌ [AI Server] Error processing image: {e}", "red"))
+                return jsonify({"error": "Invalid image input"}), 400
+                
+        else:
+            # Multipart/Form-Data
+            if 'image' not in request.files:
+                 print(colored("❌ [AI Server] Error: Image file missing", "red"))
+                 return jsonify({"error": "Image file is required"}), 400
+                 
+            image_file = request.files['image']
+            prompt = request.form.get('prompt')
+            steps = request.form.get('steps')
+            if steps:
+                steps = int(steps)
+            
+            image_data = image_file.read()
+            image_filename = image_file.filename
+
+        # Debug save
+        try:
+            with open("debug_img2img_input.png", "wb") as f:
+                f.write(image_data)
+        except:
+            pass
+        
+        image_upload_resp = upload_image(image_data, image_filename)
+
+        if not image_upload_resp:
+             return jsonify({"error": "Failed to upload image to ComfyUI"}), 500
+             
+        comfy_image_name = image_upload_resp.get("name")
+
+        print(colored(f"🎨 [AI Server] Edit Image: prompt='{prompt}', steps={steps}", "blue"))
+
+        images, seed = edit_image_logic(prompt, comfy_image_name, steps)
+
+        if not images:
+            print(colored("❌ [AI Server] Error: Failed to generate images", "red"))
+            return jsonify({"error": "Failed to generate images"}), 500
+
+        # Retrieve the first image found
+        for node_id in images:
+            for image_data in images[node_id]:
+                print(colored(f"✅ [AI Server] Sending generated image back (seed: {seed})", "green"))
+                return send_file(
+                    io.BytesIO(image_data),
+                    mimetype='image/png',
+                    as_attachment=False,
+                    download_name=f"img2img-{seed}.png"
+                )
+
+        print(colored("❌ [AI Server] Error: No images found in output", "red"))
+        return jsonify({"error": "No images generated"}), 500
+
+    except Exception as e:
+        print(colored(f"🔥 [AI Server] UNEXPECTED CRITICAL ERROR: {str(e)}", "red", attrs=["bold"]))
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+@app.route('/generate-with-preview', methods=['POST'])
+def generate_with_preview_route():
+    print("!!! [AI Server] RECEIVED REQUEST ON /generate-with-preview !!!")
+    try:
+        print(colored("🚀 [AI Server] Received request on /generate-with-preview", "green", attrs=["bold"]))
         data = request.json
         print(colored(f"📦 [AI Server] Request data: {json.dumps(data, indent=2)}", "white"))
 
@@ -650,8 +834,12 @@ def generate_image_route():
         positive_prompt = data['prompt']
         negative_prompt = data.get('negative_prompt', "")
         steps = data.get('steps', 25)
-        width = data.get('width', 512)
-        height = data.get('height', 512)
+        
+        # Optimize resolution for Z-Image model
+        input_width = data.get('width', 512)
+        input_height = data.get('height', 512)
+        width, height = optimize_resolution(input_width, input_height)
+        
         socket_id = data.get('socketId') # Optional socket ID for streaming
 
         print(colored(f"🎨 [AI Server] Generating image: prompt='{positive_prompt}', steps={steps}, res={width}x{height}, socket={socket_id}", "blue"))
@@ -668,6 +856,57 @@ def generate_image_route():
             for image_data in images[node_id]:
                 print(colored(f"✅ [AI Server] Sending generated image back (seed: {seed})", "green"))
                 # Returns the first image found
+                return send_file(
+                    io.BytesIO(image_data),
+                    mimetype='image/png',
+                    as_attachment=False,
+                    download_name=f"generated-{seed}.png"
+                )
+
+        print(colored("❌ [AI Server] Error: No images found in the output collection", "red"))
+        return jsonify({"error": "No images generated"}), 500
+    except Exception as e:
+        print(colored(f"🔥 [AI Server] UNEXPECTED CRITICAL ERROR: {str(e)}", "red", attrs=["bold"]))
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+@app.route('/generate-image', methods=['POST'])
+def generate_image_route():
+    print("!!! [AI Server] RECEIVED REQUEST ON /generate-image !!!")
+    try:
+        print(colored("🚀 [AI Server] Received request on /generate-image (workflow.json only)", "green", attrs=["bold"]))
+        data = request.json
+        print(colored(f"📦 [AI Server] Request data: {json.dumps(data, indent=2)}", "white"))
+
+        if not data or 'prompt' not in data:
+            print(colored("❌ [AI Server] Error: No prompt provided", "red"))
+            return jsonify({"error": "No prompt provided"}), 400
+
+        positive_prompt = data['prompt']
+        negative_prompt = data.get('negative_prompt', "")
+        steps = data.get('steps', 25)
+        
+        # Optimize resolution for Z-Image model
+        input_width = data.get('width', 512)
+        input_height = data.get('height', 512)
+        width, height = optimize_resolution(input_width, input_height)
+        
+        socket_id = data.get('socketId')
+
+        print(colored(f"🎨 [AI Server] Generating image: prompt='{positive_prompt}', steps={steps}, res={width}x{height}", "blue"))
+
+        # Use the original generate_images function (workflow.json only)
+        images, seed = generate_images(positive_prompt, negative_prompt, steps, (width, height), socket_id)
+
+        if not images:
+            print(colored("❌ [AI Server] Error: Failed to generate images", "red"))
+            return jsonify({"error": "Failed to generate images"}), 500
+
+        # Retrieve the first image found
+        for node_id in images:
+            for image_data in images[node_id]:
+                print(colored(f"✅ [AI Server] Sending generated image back (seed: {seed})", "green"))
                 return send_file(
                     io.BytesIO(image_data),
                     mimetype='image/png',

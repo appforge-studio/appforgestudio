@@ -8,7 +8,8 @@ import '../utilities/pallet.dart';
 import 'layers_tree.dart';
 import 'search_box.dart';
 import 'agentic_edits_panel.dart';
-import 'vector_editor/vector_editor_panel.dart';
+
+import 'screen_list_panel.dart';
 
 const double controlWidth = 280;
 
@@ -43,7 +44,7 @@ class ComponentPanel extends StatelessWidget {
               ),
             ],
           ),
-          
+
           Expanded(
             child: Row(
               children: [
@@ -52,60 +53,84 @@ class ComponentPanel extends StatelessWidget {
                   children: [
                     const SizedBox(height: 30),
                     Obx(() {
-                       if (canvasController.isEditingComponent) {
-                           // Vector Tools
-                           return Column(
-                               children: [
-                                   _iconButton(
-                                      icon: FontAwesomeIcons.arrowPointer,
-                                      selected: true, // TODO: Track active tool
-                                      onTap: () {},
-                                   ),
-                                   const SizedBox(height: 10),
-                                   _iconButton(
-                                      icon: FontAwesomeIcons.bezierCurve,
-                                      selected: false,
-                                      onTap: () {},
-                                   ),
-                                   const SizedBox(height: 10),
-                                   _iconButton(
-                                      icon: FontAwesomeIcons.pen,
-                                      selected: false,
-                                      onTap: () {},
-                                   ),
-                                   const SizedBox(height: 40),
-                                   _iconButton(
-                                      icon: Icons.check, // Done
-                                      selected: false,
-                                      onTap: () => canvasController.setEditingComponent(null),
-                                      color: Colors.green,
-                                   ),
-                               ]
-                           );
-                       } else {
-                           // Standard Navigation
-                           return Column(
-                               children: [
-                                    _iconButton(
-                                      icon: FontAwesomeIcons.mobile,
-                                      selected: sidebarController.selectedPage == 0,
-                                      onTap: () => sidebarController.setSelectedPage(0),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _iconButton(
-                                      icon: FontAwesomeIcons.layerGroup,
-                                      selected: sidebarController.selectedPage == 1,
-                                      onTap: () => sidebarController.setSelectedPage(1),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _iconButton(
-                                      icon: FontAwesomeIcons.server,
-                                      selected: sidebarController.selectedPage == 2,
-                                      onTap: () => sidebarController.setSelectedPage(2),
-                                    ),
-                               ]
-                           );
-                       }
+                      if (canvasController.isEditingComponent) {
+                        // Vector Tools
+                        return Column(
+                          children: [
+                            _iconButton(
+                              icon: FontAwesomeIcons.arrowPointer,
+                              selected: true, // TODO: Track active tool
+                              onTap: () {},
+                            ),
+                            const SizedBox(height: 10),
+                            _iconButton(
+                              icon: FontAwesomeIcons.bezierCurve,
+                              selected: false,
+                              onTap: () {},
+                            ),
+                            const SizedBox(height: 10),
+                            _iconButton(
+                              icon: FontAwesomeIcons.pen,
+                              selected: false,
+                              onTap: () {},
+                            ),
+                            const SizedBox(height: 40),
+                            _iconButton(
+                              icon: Icons.check, // Done
+                              selected: false,
+                              onTap: () =>
+                                  canvasController.setEditingComponent(null),
+                              color: Colors.green,
+                            ),
+                          ],
+                        );
+                      } else {
+                        // Standard Navigation
+                        return Column(
+                          children: [
+                            _iconButton(
+                              icon: FontAwesomeIcons.mobile,
+                              selected:
+                                  sidebarController.selectedPage ==
+                                  SidebarController.PAGE_SCREENS,
+                              onTap: () => sidebarController.setSelectedPage(
+                                SidebarController.PAGE_SCREENS,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _iconButton(
+                              icon: FontAwesomeIcons
+                                  .shapes, // Changed from mobile to shapes for components
+                              selected:
+                                  sidebarController.selectedPage ==
+                                  SidebarController.PAGE_COMPONENTS,
+                              onTap: () => sidebarController.setSelectedPage(
+                                SidebarController.PAGE_COMPONENTS,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _iconButton(
+                              icon: FontAwesomeIcons.layerGroup,
+                              selected:
+                                  sidebarController.selectedPage ==
+                                  SidebarController.PAGE_LAYERS,
+                              onTap: () => sidebarController.setSelectedPage(
+                                SidebarController.PAGE_LAYERS,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _iconButton(
+                              icon: FontAwesomeIcons.server,
+                              selected:
+                                  sidebarController.selectedPage ==
+                                  SidebarController.PAGE_DATA,
+                              onTap: () => sidebarController.setSelectedPage(
+                                SidebarController.PAGE_DATA,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
                     }),
                   ],
                 ),
@@ -121,11 +146,13 @@ class ComponentPanel extends StatelessWidget {
                       color: Pallet.inside1,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Obx(() => _buildContent(
-                      selectedPage: sidebarController.selectedPage,
-                      dividerPosition: sidebarController.dividerPosition,
-                      dividerController: sidebarController,
-                    )),
+                    child: Obx(
+                      () => _buildContent(
+                        selectedPage: sidebarController.selectedPage,
+                        dividerPosition: sidebarController.dividerPosition,
+                        dividerController: sidebarController,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -162,7 +189,7 @@ class ComponentPanel extends StatelessWidget {
     required double dividerPosition,
     required SidebarController dividerController,
   }) {
-    if (selectedPage == 2) {
+    if (selectedPage == SidebarController.PAGE_DATA) {
       // Data/Code page - placeholder for now
       return const Center(
         child: Text(
@@ -172,12 +199,17 @@ class ComponentPanel extends StatelessWidget {
       );
     }
 
+    // Screens page -> Full height, no AI panel
+    if (selectedPage == SidebarController.PAGE_SCREENS) {
+      return _buildPanelContent(selectedPage);
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final paneHeight = constraints.maxHeight;
         final topFlex = (dividerPosition * 100).clamp(20, 80).toInt();
         final bottomFlex = 100 - topFlex;
-        
+
         return Column(
           children: [
             Flexible(
@@ -190,19 +222,19 @@ class ComponentPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      selectedPage == 0 ? 'Components' : 'Layers',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                    if (selectedPage != SidebarController.PAGE_SCREENS)
+                      Text(
+                        selectedPage == SidebarController.PAGE_COMPONENTS
+                            ? 'Components'
+                            : 'Layers',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: selectedPage == 0
-                          ? _buildComponentsList()
-                          : const LayersTree(),
-                    ),
+                    if (selectedPage != SidebarController.PAGE_SCREENS)
+                      const SizedBox(height: 10),
+                    Expanded(child: _buildPanelContent(selectedPage)),
                   ],
                 ),
               ),
@@ -220,17 +252,12 @@ class ComponentPanel extends StatelessWidget {
                 child: Container(
                   height: 20,
                   decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(color: Pallet.divider),
-                    ),
+                    border: Border(top: BorderSide(color: Pallet.divider)),
                   ),
                 ),
               ),
             ),
-            Flexible(
-              flex: bottomFlex,
-              child: const AgenticEditsPanel(),
-            ),
+            Flexible(flex: bottomFlex, child: const AgenticEditsPanel()),
           ],
         );
       },
@@ -302,5 +329,18 @@ class ComponentPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildPanelContent(int selectedPage) {
+    switch (selectedPage) {
+      case SidebarController.PAGE_SCREENS:
+        return const ScreenListPanel();
+      case SidebarController.PAGE_COMPONENTS:
+        return _buildComponentsList();
+      case SidebarController.PAGE_LAYERS:
+        return const LayersTree();
+      default:
+        return const SizedBox();
+    }
   }
 }

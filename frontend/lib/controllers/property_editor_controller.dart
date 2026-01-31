@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../components/component_factory.dart';
 import '../components/component_properties_factory.dart';
@@ -21,10 +20,6 @@ class PropertyEditorController extends GetxController {
 
   // Component selection management
   void selectComponent(ComponentModel? component) {
-    debugPrint(
-      '🎛️ PropertyEditor: selectComponent called with ${component?.id}',
-    );
-    debugPrint('🎛️ PropertyEditor: Setting isVisible to ${component != null}');
     _updateState(
       _state.value.copyWith(
         selectedComponent: component,
@@ -34,7 +29,6 @@ class PropertyEditorController extends GetxController {
   }
 
   void clearSelection() {
-    debugPrint('🎛️ PropertyEditor: clearSelection called');
     _updateState(
       _state.value.copyWith(selectedComponent: null, isVisible: false),
     );
@@ -165,17 +159,17 @@ class PropertyEditorController extends GetxController {
     super.onInit();
 
     // Listen to canvas controller selection changes
-    // We'll use ever to listen to the canvas controller's state changes
-    ever(_canvasController.stateStream, (CanvasState canvasState) {
-      debugPrint(
-        '🎛️ PropertyEditor: Canvas state changed - selectedComponent: ${canvasState.selectedComponent?.id}',
-      );
-      if (canvasState.selectedComponent != _state.value.selectedComponent) {
-        debugPrint(
-          '🎛️ PropertyEditor: Updating selection to ${canvasState.selectedComponent?.id}',
-        );
-        selectComponent(canvasState.selectedComponent);
-      }
-    });
+    // We use debounce to delay the property editor update, making selection feel instant
+    // as requested by the user ("it is okay if the property editor appears later").
+    debounce(
+      _canvasController.selectedComponentIds,
+      (Set<String> selectedIds) {
+        final primarySelection = _canvasController.selectedComponent;
+        if (primarySelection != _state.value.selectedComponent) {
+          selectComponent(primarySelection);
+        }
+      },
+      time: const Duration(milliseconds: 150),
+    );
   }
 }

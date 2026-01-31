@@ -5,6 +5,7 @@ import '../services/socket_service.dart';
 import '../controllers/canvas_controller.dart';
 import '../controllers/property_editor_controller.dart';
 import '../controllers/sidebar_controller.dart';
+import '../controllers/screens_controller.dart';
 
 class AppBindings extends Bindings {
   static const String baseUrl = "http://127.0.0.1:5000";
@@ -48,5 +49,8 @@ class AppBindings extends Bindings {
 
     // Initialize SidebarController
     Get.put<SidebarController>(SidebarController(), permanent: true);
+
+    // Initialize ScreensController
+    Get.put<ScreensController>(ScreensController(), permanent: true);
   }
 }

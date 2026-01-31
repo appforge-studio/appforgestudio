@@ -58,6 +58,9 @@ class JsonSvgBuilder extends JsonWidgetBuilder {
     return SvgPicture.string(
       svgData,
       key: key,
+      fit: BoxFit.contain,
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
       colorFilter: color != null
           ? ColorFilter.mode(color, BlendMode.srcIn)
           : null,

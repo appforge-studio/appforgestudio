@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:json_dynamic_widget/json_dynamic_widget.dart';
 import 'visual_builder_app.dart';
 import 'widgets/json_builders/json_svg_builder.dart';
@@ -9,6 +10,7 @@ import 'widgets/json_builders/json_google_text_builder.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await GetStorage.init();
 
   // Note: All component interactions are now handled by the ComponentOverlayManager
   // Components are purely visual with no interaction logic in their JSON schemas

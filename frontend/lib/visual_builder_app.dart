@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'bindings/app_bindings.dart';
 import 'controllers/canvas_controller.dart';
+import 'controllers/screens_controller.dart';
 import 'utilities/pallet.dart';
 import 'widgets/component_panel.dart';
 import 'widgets/design_canvas.dart';
@@ -44,6 +45,7 @@ class VisualBuilderHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = Get.find<CanvasController>();
+    final screensController = Get.find<ScreensController>();
 
     return Scaffold(
       backgroundColor: Pallet.background,
@@ -81,7 +83,34 @@ class VisualBuilderHome extends StatelessWidget {
                       // const UndoRedoToolbar(), // Removed per user request
                       // const SizedBox(height: 5),
                       // Design Canvas (center)
-                      const Expanded(child: DesignCanvas()),
+                      // Design Canvas (center)
+                      Expanded(
+                        child: Obx(() {
+                          if (screensController.activeScreenId.value.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.mobile_screen_share,
+                                    size: 64,
+                                    color: Pallet.font3.withOpacity(0.5),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(
+                                    "Select or create a screen to start",
+                                    style: TextStyle(
+                                      color: Pallet.font3,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return const DesignCanvas();
+                        }),
+                      ),
                     ],
                   ),
                 ),
