@@ -3,6 +3,7 @@ import '../../models/component_model.dart';
 import '../../models/component_properties.dart';
 import '../../models/types/color.dart';
 import '../../models/types/side.dart';
+import '../../models/types/corner.dart';
 import '../component_factory.dart';
 import '../component_properties_factory.dart';
 
@@ -83,8 +84,9 @@ class ContainerComponent extends ComponentModel {
     }
 
     final borderRadius = properties.shouldApplyProperty('borderRadius')
-        ? (properties.getProperty<double>('borderRadius') ?? 8.0)
-        : 0.0;
+        ? (properties.getProperty<XDCorner>('borderRadius') ??
+            XDCorner.all(8.0))
+        : XDCorner.all(0.0);
 
     final applyPadding = properties.shouldApplyProperty('padding');
     final padding = applyPadding
@@ -146,7 +148,15 @@ class ContainerComponent extends ComponentModel {
         'decoration': {
           if (colorHex != null) 'color': colorHex.toUpperCase(),
           if (gradient != null) 'gradient': gradient,
-          'borderRadius': {'radius': borderRadius, 'type': 'circular'},
+          'borderRadius': borderRadius.type == CornerType.all
+              ? {'radius': borderRadius.topLeft, 'type': 'circular'}
+              : {
+                  'type': 'only',
+                  'topLeft': borderRadius.topLeft,
+                  'topRight': borderRadius.topRight,
+                  'bottomRight': borderRadius.bottomRight,
+                  'bottomLeft': borderRadius.bottomLeft,
+                },
           if (applyBorder)
             'border': {
               'color': borderColorHex!.toUpperCase(),
@@ -170,7 +180,15 @@ class ContainerComponent extends ComponentModel {
       return {
         'type': 'clip_rrect',
         'args': {
-          'borderRadius': {'radius': borderRadius, 'type': 'circular'},
+          'borderRadius': borderRadius.type == CornerType.all
+              ? {'radius': borderRadius.topLeft, 'type': 'circular'}
+              : {
+                  'type': 'only',
+                  'topLeft': borderRadius.topLeft,
+                  'topRight': borderRadius.topRight,
+                  'bottomRight': borderRadius.bottomRight,
+                  'bottomLeft': borderRadius.bottomLeft,
+                },
           'child': {
             'type': 'backdrop_filter',
             'args': {

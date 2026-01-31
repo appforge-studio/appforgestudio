@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/component_model.dart';
 import '../../models/component_properties.dart';
 import '../../bindings/app_bindings.dart';
+import '../../models/types/corner.dart';
 import '../component_factory.dart';
 import '../component_properties_factory.dart';
 
@@ -29,7 +30,8 @@ class ImageComponent extends ComponentModel {
     final width = properties.getProperty<double>('width') ?? 150.0;
     final height = properties.getProperty<double>('height') ?? 150.0;
     final fit = properties.getProperty<BoxFit>('fit') ?? BoxFit.cover;
-    final borderRadius = properties.getProperty<double>('borderRadius') ?? 0.0;
+    final borderRadius =
+        properties.getProperty<XDCorner>('borderRadius') ?? XDCorner.all(0.0);
 
     // Convert BoxFit enum to string
     String boxFitString = switch (fit) {
@@ -52,11 +54,19 @@ class ImageComponent extends ComponentModel {
       },
     };
 
-    if (borderRadius > 0) {
+    if (borderRadius.values.any((v) => v > 0)) {
       return {
         'type': 'clip_rrect',
         'args': {
-          'borderRadius': {'radius': borderRadius, 'type': 'circular'},
+          'borderRadius': borderRadius.type == CornerType.all
+              ? {'radius': borderRadius.topLeft, 'type': 'circular'}
+              : {
+                  'type': 'only',
+                  'topLeft': borderRadius.topLeft,
+                  'topRight': borderRadius.topRight,
+                  'bottomRight': borderRadius.bottomRight,
+                  'bottomLeft': borderRadius.bottomLeft,
+                },
           'child': imageJson,
         },
       };

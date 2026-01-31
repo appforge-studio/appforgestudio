@@ -15,6 +15,7 @@ import 'property_shadow_editor.dart';
 import 'property_background_blur_editor.dart';
 import 'property_font_selector.dart';
 import 'property_overlay_dropdown.dart';
+import 'property_corner_field.dart';
 
 class PropertyEditor extends StatelessWidget {
   const PropertyEditor({super.key});
@@ -201,6 +202,8 @@ class GenericPropertyEditor extends StatelessWidget {
         return _buildDropdownField(property as DropdownProperty);
       case PropertyType.side:
         return _buildSideField(property as SideProperty);
+      case PropertyType.corner:
+        return _buildCornerField(property as CornerProperty);
       case PropertyType.icon:
         return _buildIconField(property as IconProperty);
       case PropertyType.action:
@@ -414,6 +417,24 @@ class GenericPropertyEditor extends StatelessWidget {
     return _buildPropertyRow(
       property: property,
       child: PropertySideField(
+        label: property.displayName,
+        value: property.value,
+        onChanged: (newValue) => _updateValue(property.key, newValue),
+        labels: labels,
+        showLabel: false,
+      ),
+    );
+  }
+
+  Widget _buildCornerField(CornerProperty property) {
+    List<String>? labels;
+    if (property.key == 'borderRadius') {
+      labels = ['tl', 'tr', 'br', 'bl'];
+    }
+
+    return _buildPropertyRow(
+      property: property,
+      child: PropertyCornerField(
         label: property.displayName,
         value: property.value,
         onChanged: (newValue) => _updateValue(property.key, newValue),

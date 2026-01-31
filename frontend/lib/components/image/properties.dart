@@ -1,6 +1,7 @@
 import '../../models/common_property.dart';
 import '../../models/component_properties.dart';
 import '../../models/types/color.dart'; // Needed for XDColor
+import '../../models/types/corner.dart';
 import 'package:flutter/painting.dart'; // Needed for Alignment
 
 class ImageProperties {
@@ -31,12 +32,10 @@ class ImageProperties {
         group: 'Layout',
         enable: Enabled(show: true, enabled: true),
       ),
-      const NumberProperty(
+      CornerProperty(
         key: 'borderRadius',
         displayName: 'Radius',
-        value: 0,
-        min: 0.0,
-        max: 1000.0,
+        value: XDCorner.all(0),
         group: 'Appearance',
         enable: Enabled(show: true, enabled: true),
       ),
@@ -65,6 +64,6 @@ class ImageProperties {
     'width': (value) => value is num ? null : 'width must be a number',
     'height': (value) => value is num ? null : 'height must be a number',
     'borderRadius': (value) =>
-        value is num ? null : 'borderRadius must be a number',
+        value is XDCorner ? null : 'borderRadius must be an XDCorner',
   };
 }
